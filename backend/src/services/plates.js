@@ -16,10 +16,14 @@ export async function consultarPlaca(placa) {
       {
         params: { token },
         headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; AguiarVeiculos/1.0)',
-          Accept: 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          'Accept': 'application/json, text/plain, */*',
+          'Accept-Language': 'pt-BR,pt;q=0.9',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'Referer': 'https://apiplacas.com.br/',
+          'Origin': 'https://apiplacas.com.br',
         },
-        timeout: 6000,
+        timeout: 10000,
       }
     );
     console.log('[plates] resposta raw:', JSON.stringify(d));

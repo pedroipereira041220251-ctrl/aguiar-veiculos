@@ -150,11 +150,12 @@ export async function enviarResposta(to, resultado, _canal) {
   const { message, keyboard, type } = resultado;
 
   if (type === 'list' && keyboard) {
-    const linhas = keyboard.sections?.flatMap(s => s.rows.map(r => `• ${r.title}`)) || [];
-    await sendText(to, message + '\n\n' + linhas.join('\n'));
+    const rows = keyboard.sections?.flatMap(s => s.rows) || keyboard.buttons || [];
+    const linhas = rows.map((r, i) => `${i + 1} - ${r.title || r.label}`);
+    await sendText(to, message + '\n\n' + linhas.join('\n') + '\n\n_Responda com o número_');
   } else if (type === 'buttons' && keyboard) {
-    const linhas = keyboard.buttons.map(b => `• ${b.label}`);
-    await sendText(to, message + '\n\n' + linhas.join('\n'));
+    const linhas = keyboard.buttons.map((b, i) => `${i + 1} - ${b.label}`);
+    await sendText(to, message + '\n\n' + linhas.join('\n') + '\n\n_Responda com o número_');
   } else {
     // Texto simples
     await sendText(to, message);

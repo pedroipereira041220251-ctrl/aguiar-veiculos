@@ -18,8 +18,15 @@ import { consultarPlaca } from './plates.js';
 // ENTRY POINTS
 // ─────────────────────────────────────────────────────────
 
+// Mapa estático de opções numeradas por submenu (WhatsApp texto simples)
+const MENU_OPCOES = {
+  main:      ['submenu_veiculos', 'submenu_consultas', 'sair'],
+  veiculos:  ['novo', 'custo', 'venda', 'edicao', 'voltar'],
+  consultas: ['estoque', 'financeiro', 'leads', 'alertas', 'voltar'],
+};
+
 export async function activateMenu(canal, ownerId) {
-  await upsertSession(canal, ownerId, { modo_gestao: true, estado: null, dados_parciais: {} });
+  await upsertSession(canal, ownerId, { modo_gestao: true, estado: null, dados_parciais: { current_submenu: 'main' } });
   return buildMenuPrincipal(canal);
 }
 
@@ -28,29 +35,46 @@ export async function handler({ text, canal, owner_id, body }) {
   const txt    = (text || '').trim();
   const data   = txt.toLowerCase();  // para comparar callbacks Telegram
 
+  // ── Número → selecionar opção do menu atual (WhatsApp texto) ────
+  const numInput = parseInt(data, 10);
+  if (!isNaN(numInput) && sessao?.modo_gestao && !sessao?.estado) {
+    const submenu = sessao?.dados_parciais?.current_submenu || 'main';
+    const escolha = MENU_OPCOES[submenu]?.[numInput - 1];
+    if (escolha) return handler({ text: escolha, canal, owner_id, body });
+  }
+
   // ── Sair ──────────────────────────────────────────────
-  if (data === 'sair' || txt === '❌ Sair') {
+  if (data === 'sair') {
     await resetSessao(canal, owner_id);
     return txt_('Modo gestão encerrado. Mande /menu para recomeçar.');
   }
 
   // ── Submenus (sem estado de wizard ativo) ─────────────
   if (!sessao?.estado) {
-    if (data === 'submenu_veiculos') return buildSubmenuVeiculos(canal);
-    if (data === 'submenu_consultas') return buildSubmenuConsultas(canal);
+    if (data === 'submenu_veiculos') {
+      await upsertSession(canal, owner_id, { dados_parciais: { current_submenu: 'veiculos' } });
+      return buildSubmenuVeiculos(canal);
+    }
+    if (data === 'submenu_consultas') {
+      await upsertSession(canal, owner_id, { dados_parciais: { current_submenu: 'consultas' } });
+      return buildSubmenuConsultas(canal);
+    }
+    if (data === 'voltar') {
+      await upsertSession(canal, owner_id, { dados_parciais: { current_submenu: 'main' } });
+      return buildMenuPrincipal(canal);
+    }
 
     // Atalhos diretos (Telegram usa callback_data diretamente)
-    if (data === 'novo')     return iniciarCadastro(canal, owner_id);
-    if (data === 'custo')    return iniciarCusto(canal, owner_id);
-    if (data === 'venda')    return iniciarVenda(canal, owner_id);
-    if (data === 'edicao')   return iniciarEdicao(canal, owner_id);
-    if (data === 'estoque')  return consultarEstoque();
+    if (data === 'novo')       return iniciarCadastro(canal, owner_id);
+    if (data === 'custo')      return iniciarCusto(canal, owner_id);
+    if (data === 'venda')      return iniciarVenda(canal, owner_id);
+    if (data === 'edicao')     return iniciarEdicao(canal, owner_id);
+    if (data === 'estoque')    return consultarEstoque();
     if (data === 'financeiro') return consultarFinanceiro();
-    if (data === 'leads')    return consultarLeads();
-    if (data === 'alertas')  return consultarAlertas();
-    if (data === 'voltar')   return buildMenuPrincipal(canal);
+    if (data === 'leads')      return consultarLeads();
+    if (data === 'alertas')    return consultarAlertas();
 
-    // Texto livre sem sessão → ignorar (não deveria chegar aqui)
+    // Texto livre sem sessão → mostrar menu
     return buildMenuPrincipal(canal);
   }
 

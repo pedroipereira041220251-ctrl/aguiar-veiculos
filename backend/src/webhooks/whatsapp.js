@@ -34,7 +34,7 @@ router.post('/', (req, res) => {
   // 3. Processar de forma assíncrona (não bloqueia a resposta)
   const body = Buffer.isBuffer(req.body) ? JSON.parse(req.body.toString()) : req.body;
   processarMensagem(body).catch(err => {
-    console.error('[webhook/whatsapp] Erro no processamento assíncrono:', err);
+    console.error('[webhook/whatsapp] Erro no processamento assíncrono:', err.message, err.response?.data);
   });
 });
 
@@ -98,8 +98,11 @@ async function rotearDono(phone, texto, body) {
 
   // Ativar menu explicitamente
   if (textoNorm === '/menu' || textoNorm === 'menu') {
+    console.log('[rotearDono] ativando menu para', phone);
     const resultado = await activateMenu('whatsapp', phone);
+    console.log('[rotearDono] resultado:', JSON.stringify(resultado));
     await enviarResposta(phone, resultado, 'whatsapp');
+    console.log('[rotearDono] resposta enviada');
     return;
   }
 

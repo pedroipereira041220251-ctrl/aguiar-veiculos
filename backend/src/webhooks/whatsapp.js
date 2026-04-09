@@ -150,29 +150,9 @@ export async function enviarResposta(to, resultado, _canal) {
   const { message, keyboard, type } = resultado;
 
   if (type === 'list' && keyboard) {
-    // Tentar List Message; se falhar, cair para texto
-    try {
-      await sendListMessage(to, {
-        title:       keyboard.title || 'Menu',
-        description: message,
-        buttonLabel: keyboard.buttonLabel || 'Ver opções',
-        sections:    keyboard.sections,
-      });
-      return;
-    } catch (e) {
-      console.warn('[enviarResposta] sendListMessage falhou, usando texto:', e.message);
-    }
-    // Fallback: formatar como texto
     const linhas = keyboard.sections?.flatMap(s => s.rows.map(r => `• ${r.title}`)) || [];
     await sendText(to, message + '\n\n' + linhas.join('\n'));
   } else if (type === 'buttons' && keyboard) {
-    // Reply Buttons — confirmações (máx 3)
-    try {
-      await sendButtonMessage(to, message, keyboard.buttons, keyboard.footer || '');
-      return;
-    } catch (e) {
-      console.warn('[enviarResposta] sendButtonMessage falhou, usando texto:', e.message);
-    }
     const linhas = keyboard.buttons.map(b => `• ${b.label}`);
     await sendText(to, message + '\n\n' + linhas.join('\n'));
   } else {

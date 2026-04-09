@@ -13,8 +13,14 @@ const headers = () => ({
 });
 
 // Formatar número: garantir DDI + sem caracteres especiais
+// No Brasil, números móveis precisam do 9º dígito para envio
 function formatPhone(phone) {
-  return String(phone).replace(/\D/g, '');
+  let n = String(phone).replace(/\D/g, '');
+  // Se começa com 55 (Brasil) e tem 12 dígitos (sem o 9º dígito), insere o 9
+  if (n.startsWith('55') && n.length === 12) {
+    n = '55' + n.slice(2, 4) + '9' + n.slice(4);
+  }
+  return n;
 }
 
 // ── sendText ───────────────────────────────────────────────

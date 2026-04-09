@@ -14,14 +14,15 @@ export async function consultarPlaca(placa) {
     const { data: d } = await axios.get(
       `https://apiplacas.com.br/api/v1/placa/${placaNorm}`,
       {
+        params: { token },
         headers: {
-          Authorization: `Bearer ${token}`,
           'User-Agent': 'Mozilla/5.0 (compatible; AguiarVeiculos/1.0)',
           Accept: 'application/json',
         },
         timeout: 6000,
       }
     );
+    console.log('[plates] resposta raw:', JSON.stringify(d));
 
     const modeloCompleto = [d.modelo, d.submodelo, d.versao]
       .filter(Boolean)
@@ -39,7 +40,11 @@ export async function consultarPlaca(placa) {
       fipe:   d.fipe?.valor ? parseFloat(d.fipe.valor) : null,
     };
   } catch (err) {
-    if (err.response?.status === 404) return { found: false };
+    if (err.response?.status === 404) {
+      console.log('[plates] 404 para placa:', placaNorm);
+      return { found: false };
+    }
+    console.error('[plates] Erro ao consultar placa:', err.message, err.response?.status, err.response?.data);
     return { found: false };
   }
 }

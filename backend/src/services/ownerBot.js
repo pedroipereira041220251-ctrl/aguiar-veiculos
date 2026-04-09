@@ -35,6 +35,11 @@ export async function handler({ text, canal, owner_id, body }) {
   const txt    = (text || '').trim();
   const data   = txt.toLowerCase();  // para comparar callbacks Telegram
 
+  // Normalizar: remove acentos, minúsculo, só letras/números/espaço
+  const norm = data
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9 ]/g, '').trim();
+
   // ── Número → selecionar opção do menu atual (WhatsApp texto) ────
   const numInput = parseInt(data, 10);
   if (!isNaN(numInput) && sessao?.modo_gestao && !sessao?.estado) {
@@ -44,35 +49,35 @@ export async function handler({ text, canal, owner_id, body }) {
   }
 
   // ── Sair ──────────────────────────────────────────────
-  if (data === 'sair') {
+  if (data === 'sair' || norm === 'sair') {
     await resetSessao(canal, owner_id);
     return txt_('Modo gestão encerrado. Mande /menu para recomeçar.');
   }
 
   // ── Submenus (sem estado de wizard ativo) ─────────────
   if (!sessao?.estado) {
-    if (data === 'submenu_veiculos') {
+    if (data === 'submenu_veiculos' || norm === 'veiculos') {
       await upsertSession(canal, owner_id, { dados_parciais: { current_submenu: 'veiculos' } });
       return buildSubmenuVeiculos(canal);
     }
-    if (data === 'submenu_consultas') {
+    if (data === 'submenu_consultas' || norm === 'consultas') {
       await upsertSession(canal, owner_id, { dados_parciais: { current_submenu: 'consultas' } });
       return buildSubmenuConsultas(canal);
     }
-    if (data === 'voltar') {
+    if (data === 'voltar' || norm === 'voltar') {
       await upsertSession(canal, owner_id, { dados_parciais: { current_submenu: 'main' } });
       return buildMenuPrincipal(canal);
     }
 
-    // Atalhos diretos (Telegram usa callback_data diretamente)
-    if (data === 'novo')       return iniciarCadastro(canal, owner_id);
-    if (data === 'custo')      return iniciarCusto(canal, owner_id);
-    if (data === 'venda')      return iniciarVenda(canal, owner_id);
-    if (data === 'edicao')     return iniciarEdicao(canal, owner_id);
-    if (data === 'estoque')    return consultarEstoque();
-    if (data === 'financeiro') return consultarFinanceiro();
-    if (data === 'leads')      return consultarLeads();
-    if (data === 'alertas')    return consultarAlertas();
+    // Atalhos diretos — aceita data key ou texto normalizado
+    if (data === 'novo'        || norm === 'novo veiculo' || norm === 'novo')        return iniciarCadastro(canal, owner_id);
+    if (data === 'custo'       || norm === 'lancar custo' || norm === 'custo')        return iniciarCusto(canal, owner_id);
+    if (data === 'venda'       || norm === 'registrar venda' || norm === 'venda')     return iniciarVenda(canal, owner_id);
+    if (data === 'edicao'      || norm === 'editar veiculo' || norm === 'edicao')     return iniciarEdicao(canal, owner_id);
+    if (data === 'estoque'     || norm === 'ver estoque' || norm === 'estoque')       return consultarEstoque();
+    if (data === 'financeiro'  || norm === 'financeiro')                              return consultarFinanceiro();
+    if (data === 'leads'       || norm === 'leads de hoje' || norm === 'leads')       return consultarLeads();
+    if (data === 'alertas'     || norm === 'alertas')                                 return consultarAlertas();
 
     // Texto livre sem sessão → mostrar menu
     return buildMenuPrincipal(canal);
@@ -82,12 +87,12 @@ export async function handler({ text, canal, owner_id, body }) {
   const estado = sessao.estado;
   const dados  = sessao.dados_parciais || {};
 
-  if (estado === 'cadastro')       return handleCadastro(txt, data, dados, canal, owner_id);
-  if (estado === 'cadastro_fotos') return handleCadastroFotos(data, dados, canal, owner_id, body);
-  if (estado === 'edicao')         return handleEdicao(txt, data, dados, canal, owner_id);
-  if (estado === 'custo')          return handleCusto(txt, data, dados, canal, owner_id);
-  if (estado === 'custo_loop')     return handleCustoLoop(data, dados, canal, owner_id);
-  if (estado === 'venda')          return handleVenda(txt, data, dados, canal, owner_id);
+  if (estado === 'cadastro')       return handleCadastro(txt, data, norm, dados, canal, owner_id);
+  if (estado === 'cadastro_fotos') return handleCadastroFotos(data, norm, dados, canal, owner_id, body);
+  if (estado === 'edicao')         return handleEdicao(txt, data, norm, dados, canal, owner_id);
+  if (estado === 'custo')          return handleCusto(txt, data, norm, dados, canal, owner_id);
+  if (estado === 'custo_loop')     return handleCustoLoop(data, norm, dados, canal, owner_id);
+  if (estado === 'venda')          return handleVenda(txt, data, norm, dados, canal, owner_id);
 
   return buildMenuPrincipal(canal);
 }
@@ -208,7 +213,7 @@ async function iniciarCadastro(canal, ownerId) {
   return txt_('🚗 *Novo veículo*\n\nDigite a *placa* do veículo:');
 }
 
-async function handleCadastro(txt, data, dados, canal, ownerId) {
+async function handleCadastro(txt, data, norm, dados, canal, ownerId) {
   const step = dados.step ?? 0;
 
   // ── Step 0: receber placa e consultar API ──────────────
@@ -239,7 +244,7 @@ async function handleCadastro(txt, data, dados, canal, ownerId) {
 
   // ── Step 0_confirm: resposta do confirm de placa ───────
   if (step === '0_confirm') {
-    if (data === 'confirmar') {
+    if (data === 'confirmar' || norm === 'confirmar' || data === '1') {
       // Pular steps 1-4, ir para step 5
       await upsertSession(canal, ownerId, {
         estado: 'cadastro',
@@ -418,15 +423,19 @@ async function finalizarCadastro(dados, canal, ownerId) {
 // WIZARD: FOTOS DO VEÍCULO (pós-cadastro)
 // ─────────────────────────────────────────────────────────
 
-async function handleCadastroFotos(data, dados, canal, ownerId, body) {
+async function handleCadastroFotos(data, norm, dados, canal, ownerId, body) {
+  // Mapear números para botões
+  if (data === '2' || (data === '1' && dados.aguardando_foto)) data = 'fotos_nao';
+  else if (data === '1' && !dados.aguardando_foto)             data = 'fotos_sim';
+
   // Usuário recusou enviar fotos
-  if (data === 'fotos_nao') {
+  if (data === 'fotos_nao' || norm === 'concluir') {
     await resetSessao(canal, ownerId);
     return txt_(`✅ *${dados.veiculo_label}* cadastrado com sucesso!\n\nAcesse o painel para adicionar fotos a qualquer momento.`);
   }
 
   // Usuário quer adicionar fotos
-  if (data === 'fotos_sim') {
+  if (data === 'fotos_sim' || norm === 'adicionar fotos') {
     await upsertSession(canal, ownerId, {
       estado: 'cadastro_fotos',
       dados_parciais: { ...dados, aguardando_foto: true },
@@ -507,7 +516,7 @@ async function iniciarEdicao(canal, ownerId) {
   return txt_('✏️ *Editar veículo*\n\nDigite a *placa* do veículo:');
 }
 
-async function handleEdicao(txt, data, dados, canal, ownerId) {
+async function handleEdicao(txt, data, norm, dados, canal, ownerId) {
   const step = dados.step ?? 1;
 
   // ── Step 1: placa ─────────────────────────────────────
@@ -542,12 +551,19 @@ async function handleEdicao(txt, data, dados, canal, ownerId) {
 
   // ── Step 1_campo: escolheu o campo ───────────────────
   if (step === '1_campo') {
+    const NUM_CAMPO = { '1': 'campo_preco', '2': 'campo_km', '3': 'campo_cor', '4': 'campo_obs' };
+    if (NUM_CAMPO[data]) data = NUM_CAMPO[data];
+
     const campos = {
       campo_preco: { label: 'novo preço de venda (R$)', field: 'preco_venda' },
       campo_km:    { label: 'nova quilometragem',       field: 'km'          },
       campo_cor:   { label: 'nova cor',                 field: 'cor'         },
       campo_obs:   { label: 'observações',              field: 'obs'         },
     };
+    if (norm === 'preco de venda' || norm === 'preco') data = 'campo_preco';
+    if (norm === 'quilometragem'  || norm === 'km')    data = 'campo_km';
+    if (norm === 'cor')                                data = 'campo_cor';
+    if (norm === 'observacoes'    || norm === 'obs')   data = 'campo_obs';
     const campo = campos[data];
     if (!campo) return buildMenuPrincipal(canal);
 
@@ -592,7 +608,7 @@ async function iniciarCusto(canal, ownerId) {
   return txt_('💰 *Lançar custo*\n\nDigite a *placa* do veículo:');
 }
 
-async function handleCusto(txt, data, dados, canal, ownerId) {
+async function handleCusto(txt, data, norm, dados, canal, ownerId) {
   const step = dados.step ?? 1;
 
   // ── Step 1: placa ─────────────────────────────────────
@@ -624,7 +640,9 @@ async function handleCusto(txt, data, dados, canal, ownerId) {
   }
 
   if (step === '1_confirm') {
-    if (data === 'outra_placa') {
+    if (data === '2') data = 'outra_placa';
+    if (data === '1') data = 'confirmar';
+    if (data === 'outra_placa' || norm === 'outra placa') {
       await upsertSession(canal, ownerId, { estado: 'custo', dados_parciais: { step: 1 } });
       return txt_('Digite a placa do veículo:');
     }
@@ -655,9 +673,11 @@ async function handleCusto(txt, data, dados, canal, ownerId) {
 
   // ── Step 4: descricao → salvar ────────────────────────
   if (step === 4) {
+    if (data === '1') data = 'adicionar';
+    if (data === '2') data = 'pular';
     const descricao = data === 'pular' ? null : (data === 'adicionar' ? null : txt);
 
-    if (data === 'adicionar') {
+    if (data === 'adicionar' || norm === 'adicionar') {
       await upsertSession(canal, ownerId, { estado: 'custo', dados_parciais: { ...dados, step: '4_obs' } });
       return txt_('Digite a observação:');
     }
@@ -719,8 +739,10 @@ async function finalizarCusto(dados, canal, ownerId) {
   }
 }
 
-async function handleCustoLoop(data, dados, canal, ownerId) {
-  if (data === 'sim') {
+async function handleCustoLoop(data, norm, dados, canal, ownerId) {
+  if (data === '1') data = 'sim';
+  if (data === '2') data = 'nao';
+  if (data === 'sim' || norm === 'sim') {
     await upsertSession(canal, ownerId, {
       estado: 'custo',
       dados_parciais: { step: 2, veiculo_id: dados.veiculo_id, modelo: dados.modelo },
@@ -740,7 +762,7 @@ async function iniciarVenda(canal, ownerId) {
   return txt_('🤝 *Registrar venda*\n\nDigite a *placa* do veículo:');
 }
 
-async function handleVenda(txt, data, dados, canal, ownerId) {
+async function handleVenda(txt, data, norm, dados, canal, ownerId) {
   const step = dados.step ?? 1;
 
   // ── Step 1: placa ─────────────────────────────────────
@@ -779,7 +801,9 @@ async function handleVenda(txt, data, dados, canal, ownerId) {
   }
 
   if (step === '1_confirm') {
-    if (data === 'outra_placa') {
+    if (data === '2') data = 'outra_placa';
+    if (data === '1') data = 'confirmar';
+    if (data === 'outra_placa' || norm === 'outra placa') {
       await upsertSession(canal, ownerId, { estado: 'venda', dados_parciais: { step: 1 } });
       return txt_('Digite a placa do veículo:');
     }
@@ -803,7 +827,9 @@ async function handleVenda(txt, data, dados, canal, ownerId) {
 
   // ── Step 3: vendedor ──────────────────────────────────
   if (step === 3) {
-    if (data === 'informar') {
+    if (data === '1') data = 'informar';
+    if (data === '2') data = 'pular';
+    if (data === 'informar' || norm === 'informar') {
       await upsertSession(canal, ownerId, { estado: 'venda', dados_parciais: { ...dados, step: '3_vendedor' } });
       return txt_('Digite o nome do vendedor:');
     }
@@ -831,7 +857,9 @@ async function handleVenda(txt, data, dados, canal, ownerId) {
 
   // ── Step 4: nome comprador → finalizar ────────────────
   if (step === 4) {
-    if (data === 'informar') {
+    if (data === '1') data = 'informar';
+    if (data === '2') data = 'pular';
+    if (data === 'informar' || norm === 'informar') {
       await upsertSession(canal, ownerId, { estado: 'venda', dados_parciais: { ...dados, step: '4_nome' } });
       return txt_('Digite o nome do comprador:');
     }

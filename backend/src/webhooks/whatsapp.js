@@ -150,12 +150,14 @@ export async function enviarResposta(to, resultado, _canal) {
   const { message, keyboard, type } = resultado;
 
   if (type === 'list' && keyboard) {
+    const NUMS = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
     const rows = keyboard.sections?.flatMap(s => s.rows) || keyboard.buttons || [];
-    const linhas = rows.map((r, i) => `${i + 1} - ${r.title || r.label}`);
-    await sendText(to, message + '\n\n' + linhas.join('\n') + '\n\n_Responda com o número_');
+    const linhas = rows.map((r, i) => `${NUMS[i] || (i+1)+'.'}  ${r.title || r.label}`);
+    await sendText(to, `${message}\n\n${linhas.join('\n')}\n\n▸ _Digite o número ou o nome_`);
   } else if (type === 'buttons' && keyboard) {
-    const linhas = keyboard.buttons.map((b, i) => `${i + 1} - ${b.label}`);
-    await sendText(to, message + '\n\n' + linhas.join('\n') + '\n\n_Responda com o número_');
+    const NUMS = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣'];
+    const linhas = keyboard.buttons.map((b, i) => `${NUMS[i] || (i+1)+'.'}  ${b.label}`);
+    await sendText(to, `${message}\n\n${linhas.join('\n')}\n\n▸ _Digite o número ou o nome_`);
   } else {
     // Texto simples
     await sendText(to, message);

@@ -49,6 +49,9 @@ async function processarMensagem(body) {
   const phone   = body.phone || body.from || body.sender?.phone || '';
   const isGroup = body.isGroupMsg === true || phone.includes('@g.us');
 
+  // DEBUG temporário — remover após confirmar funcionamento
+  console.log('[webhook] type:', body.type, '| phone:', phone, '| fromMe:', fromMe, '| texto:', extrairTexto(body));
+
   // a. Ignorar mensagens enviadas pelo próprio número (fromMe:true) e grupos
   if (fromMe || isGroup) return;
 

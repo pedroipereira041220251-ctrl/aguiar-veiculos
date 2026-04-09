@@ -1,0 +1,578 @@
+/**
+ * agente.js — Agente de IA para atendimento de clientes
+ *
+ * Pipeline (seção 6.1):
+ *  1. Debounce 3s (acumula mensagens rápidas do mesmo lead)
+ *  2. Verificar horário → fora: msg_fora_horario sem GPT-4o
+ *  3. Buscar / criar lead
+ *  4. Carregar histórico da conversa
+ *  5. GPT-4o com system prompt + histórico + tools
+ *  6. Processar tool calls em sequência
+ *  7. Enviar resposta via canal
+ *  8. Salvar histórico + atualizar ultima_interacao
+ *  9. Score 4 → notificar dono WA (agente continua)
+ *     Score 5 / pedido humano / foto entrada → handoff automático
+ *
+ * Fase 1: sem áudio (Whisper) e sem foto de entrada (Vision) — stubs para Fase 2
+ */
+
+import OpenAI from 'openai';
+import supabase from '../db/supabase.js';
+import { sendText } from './waClient.js';
+import { handoffAutomatico, notificarScore4, MOTIVOS } from './handoff.js';
+
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+// ── Debounce em memória (prod: substituir por Redis) ───────
+// Map<contato, { timer, mensagens[] }>
+const debounceMap = new Map();
+const DEBOUNCE_MS = 3000;
+
+// ─────────────────────────────────────────────────────────
+// ENTRY POINT
+// ─────────────────────────────────────────────────────────
+
+export async function handler({ contato, canal, texto, body, lead_id }) {
+  // Acumular mensagem no debounce
+  const chave = `${canal}:${contato}`;
+
+  if (debounceMap.has(chave)) {
+    const entry = debounceMap.get(chave);
+    clearTimeout(entry.timer);
+    if (texto) entry.mensagens.push(texto);
+  } else {
+    debounceMap.set(chave, { mensagens: texto ? [texto] : [], body });
+  }
+
+  const entry = debounceMap.get(chave);
+  entry.timer = setTimeout(async () => {
+    debounceMap.delete(chave);
+    await processarComIA({ contato, canal, mensagens: entry.mensagens, body: entry.body, lead_id })
+      .catch(err => console.error('[agente] Erro no processamento:', err));
+  }, DEBOUNCE_MS);
+}
+
+// ─────────────────────────────────────────────────────────
+// PROCESSAMENTO PRINCIPAL
+// ─────────────────────────────────────────────────────────
+
+async function processarComIA({ contato, canal, mensagens, body, lead_id }) {
+  // 1. Verificar horário de atendimento
+  const dentroHorario = await verificarHorario();
+  if (!dentroHorario) {
+    const { data: cfg } = await supabase.from('configuracoes').select('msg_fora_horario').eq('id', 1).single();
+    const msg = cfg?.msg_fora_horario || 'Olá! Estamos fora do horário de atendimento. Em breve retornaremos!';
+    await enviarParaCliente(contato, canal, msg);
+    return;
+  }
+
+  // 2. Buscar ou criar lead
+  const lead = await buscarOuCriarLead(contato, canal, lead_id);
+  if (!lead) return;
+
+  // Checar novamente após busca (handoff pode ter ocorrido em paralelo)
+  if (lead.atendimento_humano) return;
+
+  // 3. Carregar histórico
+  const historico = await carregarHistorico(lead.id, canal);
+
+  // 4. Montar texto consolidado (debounce pode ter acumulado várias mensagens)
+  const textoConsolidado = mensagens.filter(Boolean).join('\n');
+  if (!textoConsolidado) return;
+
+  // 5. Adicionar mensagem do usuário ao histórico
+  const mensagensGPT = [
+    ...historicoParaGPT(historico),
+    { role: 'user', content: textoConsolidado },
+  ];
+
+  // 6. Chamar GPT-4o com tools
+  const resposta = await chamarGPT(mensagensGPT, lead, contato, canal);
+  if (!resposta) return;
+
+  // 7. Enviar resposta ao cliente
+  await enviarParaCliente(contato, canal, resposta.texto);
+
+  // 8. Salvar histórico
+  await salvarMensagens(lead.id, canal, [
+    { role: 'user',      content: textoConsolidado, tipo: 'text' },
+    { role: 'assistant', content: resposta.texto,   tipo: 'text' },
+  ]);
+
+  // 9. Verificar score e disparar ações
+  if (resposta.handoff) {
+    await executarHandoff(lead.id, resposta.handoff.motivo, resposta.handoff.resumo, contato, canal);
+  } else if (resposta.score4) {
+    await notificarScore4(lead.id, resposta.score4.resumo);
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+// GPT-4o — SYSTEM PROMPT + TOOLS
+// ─────────────────────────────────────────────────────────
+
+const SYSTEM_PROMPT = `Você é o assistente virtual da Aguiar Veículos, uma loja de carros usados.
+
+Seu objetivo é qualificar leads para o dono da loja. Seja cordial, objetivo e direto. Evite emojis em excesso.
+
+Colete, ao longo da conversa:
+1. Veículo de interesse (marca, modelo, ano ou características desejadas)
+2. Prazo de compra (imediato, 30 dias, pesquisando, etc.)
+3. Forma de pagamento (financiamento ou à vista)
+4. Capacidade financeira:
+   - Se financiamento: pergunte se já tem carta de crédito aprovada
+   - Se à vista: confirme se tem o valor disponível
+
+Regras importantes:
+- NUNCA invente preços, disponibilidade ou condições. Use sempre a tool consultar_estoque.
+- Não mencione que é um bot, a menos que o cliente pergunte diretamente.
+- Se o cliente pedir para falar com um humano, use a tool handoff com motivo "pedido_cliente".
+- Use salvar_lead sempre que coletar novas informações relevantes do cliente.
+- Quando o score atingir 4 (veículo + prazo + pagamento), use notificar_score4.
+- Quando o score atingir 5 (score 4 + carta de crédito aprovada), use handoff com motivo "score5".
+
+Score de qualificação:
+1 = Apenas curiosidade, sem informações
+2 = Veículo identificado
+3 = Veículo + prazo OU veículo + pagamento
+4 = Veículo + prazo + pagamento
+5 = Score 4 + carta de crédito aprovada`;
+
+const TOOLS = [
+  {
+    type: 'function',
+    function: {
+      name: 'consultar_estoque',
+      description: 'Consulta veículos disponíveis no estoque com filtros opcionais',
+      parameters: {
+        type: 'object',
+        properties: {
+          busca:     { type: 'string',  description: 'Texto para busca por marca/modelo' },
+          preco_max: { type: 'number',  description: 'Preço máximo em reais' },
+          ano_min:   { type: 'integer', description: 'Ano mínimo do veículo' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'buscar_veiculo',
+      description: 'Busca um veículo específico pela placa',
+      parameters: {
+        type: 'object',
+        properties: {
+          placa: { type: 'string', description: 'Placa do veículo' },
+        },
+        required: ['placa'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'salvar_lead',
+      description: 'Salva ou atualiza informações do lead no CRM',
+      parameters: {
+        type: 'object',
+        properties: {
+          nome:                  { type: 'string' },
+          veiculo_interesse_id:  { type: 'string', description: 'UUID do veículo de interesse' },
+          forma_pagamento:       { type: 'string', enum: ['financiamento', 'à vista'] },
+          prazo_compra:          { type: 'string', description: 'imediato, 30 dias, pesquisando...' },
+          capacidade_financeira: { type: 'string', enum: ['carta_aprovada', 'comprovante_renda', 'a_vista_confirmado', 'sem_informacao'] },
+          score_qualificacao:    { type: 'integer', minimum: 1, maximum: 5 },
+          resumo:                { type: 'string', description: 'Resumo da conversa para o dono' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'handoff',
+      description: 'Transfere o atendimento definitivamente para o dono. Use quando: score 5 atingido, cliente pede humano, ou cliente enviou foto de entrada.',
+      parameters: {
+        type: 'object',
+        properties: {
+          motivo: { type: 'string', enum: ['score5', 'pedido_cliente', 'foto_entrada', 'assumido_painel'] },
+          resumo: { type: 'string', description: 'Resumo completo da conversa para o dono' },
+        },
+        required: ['motivo', 'resumo'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'notificar_score4',
+      description: 'Notifica o dono quando score 4 é atingido (veículo + prazo + pagamento). O agente CONTINUA respondendo.',
+      parameters: {
+        type: 'object',
+        properties: {
+          resumo: { type: 'string', description: 'Resumo do lead para o dono' },
+        },
+        required: ['resumo'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'verificar_horario',
+      description: 'Verifica se está dentro do horário de atendimento configurado',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  // Stubs para Fase 2
+  {
+    type: 'function',
+    function: {
+      name: 'registrar_foto_entrada',
+      description: '[Fase 2] Registra foto de veículo de entrada enviada pelo cliente',
+      parameters: {
+        type: 'object',
+        properties: {
+          lead_id:   { type: 'string' },
+          foto_url:  { type: 'string' },
+          modelo:    { type: 'string' },
+          ano:       { type: 'integer' },
+          km:        { type: 'integer' },
+          condicao:  { type: 'string' },
+        },
+        required: ['lead_id', 'foto_url'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'notificar_dono_entrada',
+      description: '[Fase 2] Envia foto de entrada ao dono via WhatsApp e Telegram',
+      parameters: {
+        type: 'object',
+        properties: {
+          foto_url:        { type: 'string' },
+          modelo:          { type: 'string' },
+          ano:             { type: 'integer' },
+          km:              { type: 'integer' },
+          condicao:        { type: 'string' },
+          contato_cliente: { type: 'string' },
+        },
+        required: ['foto_url', 'contato_cliente'],
+      },
+    },
+  },
+];
+
+// ─────────────────────────────────────────────────────────
+// LOOP GPT-4o COM TOOL CALLS
+// ─────────────────────────────────────────────────────────
+
+async function chamarGPT(mensagens, lead, contato, canal) {
+  const MAX_ROUNDS = 5; // evitar loop infinito de tool calls
+  let msgs = [...mensagens];
+  let handoffPayload = null;
+  let score4Payload  = null;
+
+  for (let round = 0; round < MAX_ROUNDS; round++) {
+    const completion = await openai.chat.completions.create({
+      model:       process.env.OPENAI_MODEL || 'gpt-4o',
+      messages:    [{ role: 'system', content: SYSTEM_PROMPT }, ...msgs],
+      tools:       TOOLS,
+      tool_choice: 'auto',
+      temperature: 0.7,
+    });
+
+    const choice = completion.choices[0];
+    const msg    = choice.message;
+    msgs.push(msg);
+
+    // Sem tool calls → resposta final ao cliente
+    if (!msg.tool_calls?.length) {
+      return { texto: msg.content, handoff: handoffPayload, score4: score4Payload };
+    }
+
+    // Processar tool calls em sequência
+    for (const tc of msg.tool_calls) {
+      const nome = tc.function.name;
+      let args;
+      try {
+        args = JSON.parse(tc.function.arguments);
+      } catch {
+        args = {};
+      }
+
+      const resultado = await executarTool(nome, args, lead, contato, canal);
+
+      // Detectar intenção de handoff e score 4 para executar APÓS enviar resposta ao cliente
+      if (nome === 'handoff') {
+        handoffPayload = { motivo: args.motivo, resumo: args.resumo };
+      }
+      if (nome === 'notificar_score4') {
+        score4Payload = { resumo: args.resumo };
+      }
+
+      msgs.push({
+        role:         'tool',
+        tool_call_id: tc.id,
+        content:      JSON.stringify(resultado),
+      });
+    }
+
+    // Se chegou ao fim do loop sem mensagem de texto, continuar para próximo round
+    if (choice.finish_reason === 'stop') {
+      // Já processado acima — não deve chegar aqui com tool_calls
+      break;
+    }
+  }
+
+  // Fallback: extrair último texto da sequência
+  const ultimo = msgs.filter(m => m.role === 'assistant' && m.content).pop();
+  return { texto: ultimo?.content || 'Em breve retornaremos. 😊', handoff: handoffPayload, score4: score4Payload };
+}
+
+// ─────────────────────────────────────────────────────────
+// EXECUÇÃO DAS TOOLS
+// ─────────────────────────────────────────────────────────
+
+async function executarTool(nome, args, lead, contato, canal) {
+  try {
+    switch (nome) {
+
+      case 'consultar_estoque': {
+        let query = supabase
+          .from('vw_veiculos_com_financeiro')
+          .select('id, placa, marca, modelo, ano, cor, km, preco_venda, fipe_referencia')
+          .eq('status', 'disponivel')
+          .order('preco_venda', { ascending: true })
+          .limit(10);
+
+        if (args.busca)     query = query.or(`marca.ilike.%${args.busca}%,modelo.ilike.%${args.busca}%`);
+        if (args.preco_max) query = query.lte('preco_venda', args.preco_max);
+        if (args.ano_min)   query = query.gte('ano', args.ano_min);
+
+        const { data, error } = await query;
+        if (error) return { erro: 'Erro ao consultar estoque' };
+        if (!data?.length) return { disponiveis: [], mensagem: 'Nenhum veículo disponível com esses critérios.' };
+
+        return {
+          disponiveis: data.map(v => ({
+            id:          v.id,
+            placa:       v.placa,
+            descricao:   `${v.marca} ${v.modelo} ${v.ano} · ${v.cor} · ${v.km?.toLocaleString('pt-BR')} km`,
+            preco_venda: v.preco_venda,
+          })),
+        };
+      }
+
+      case 'buscar_veiculo': {
+        const { data, error } = await supabase
+          .from('vw_veiculos_com_financeiro')
+          .select('id, placa, marca, modelo, ano, cor, km, preco_venda, status')
+          .eq('placa', args.placa?.toUpperCase())
+          .single();
+
+        if (error || !data) return { encontrado: false };
+        return { encontrado: true, veiculo: { ...data } };
+      }
+
+      case 'salvar_lead': {
+        const payload = { ...args, contato, canal };
+        delete payload.resumo; // resumo não é campo do banco
+
+        if (lead?.id) {
+          await supabase.from('leads').update(payload).eq('id', lead.id);
+          return { ok: true, lead_id: lead.id };
+        }
+
+        const { data: novoLead, error } = await supabase
+          .from('leads')
+          .insert({ contato, canal, ...payload })
+          .select('id')
+          .single();
+
+        if (error) return { erro: 'Erro ao salvar lead' };
+        // Atualizar referência de lead_id no escopo da chamada atual
+        lead.id = novoLead.id;
+        return { ok: true, lead_id: novoLead.id };
+      }
+
+      case 'handoff':
+        // Sinalizado para executar após resposta ao cliente (ver chamarGPT)
+        return { ok: true, agendado: true };
+
+      case 'notificar_score4':
+        // Sinalizado para executar após resposta ao cliente (ver chamarGPT)
+        return { ok: true, agendado: true };
+
+      case 'verificar_horario': {
+        const dentro = await verificarHorario();
+        return { dentro_horario: dentro };
+      }
+
+      // ── Fase 2 stubs ──────────────────────────────────
+      case 'registrar_foto_entrada':
+        return { ok: false, mensagem: 'Funcionalidade disponível na Fase 2' };
+
+      case 'notificar_dono_entrada':
+        return { ok: false, mensagem: 'Funcionalidade disponível na Fase 2' };
+
+      default:
+        return { erro: `Tool desconhecida: ${nome}` };
+    }
+  } catch (err) {
+    console.error(`[agente/tool:${nome}]`, err);
+    return { erro: 'Erro ao executar operação' };
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+// HANDOFF — executa após resposta enviada ao cliente
+// ─────────────────────────────────────────────────────────
+
+async function executarHandoff(leadId, motivo, resumo, contato, canal) {
+  // Mensagem ao cliente antes de transferir
+  const msgCliente = 'Vou te conectar com nosso consultor agora mesmo! Em instantes ele entrará em contato. 😊';
+  await enviarParaCliente(contato, canal, msgCliente);
+
+  await handoffAutomatico(leadId, motivo, resumo);
+}
+
+// ─────────────────────────────────────────────────────────
+// HORÁRIO DE ATENDIMENTO
+// ─────────────────────────────────────────────────────────
+
+async function verificarHorario() {
+  const { data: cfg } = await supabase
+    .from('configuracoes')
+    .select('horario_inicio, horario_fim, dias_semana')
+    .eq('id', 1)
+    .single();
+
+  if (!cfg) return true; // sem config → sempre atende
+
+  const agora = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+  const diaSemana = agora.getDay(); // 0=dom...6=sab
+
+  if (!cfg.dias_semana.includes(diaSemana)) return false;
+
+  const [hIni, mIni] = cfg.horario_inicio.split(':').map(Number);
+  const [hFim, mFim] = cfg.horario_fim.split(':').map(Number);
+  const minAtual = agora.getHours() * 60 + agora.getMinutes();
+  const minIni   = hIni * 60 + mIni;
+  const minFim   = hFim * 60 + mFim;
+
+  return minAtual >= minIni && minAtual < minFim;
+}
+
+// ─────────────────────────────────────────────────────────
+// LEAD — buscar ou criar
+// ─────────────────────────────────────────────────────────
+
+async function buscarOuCriarLead(contato, canal, leadIdHint) {
+  // Tentar pelo id já conhecido
+  if (leadIdHint) {
+    const { data } = await supabase.from('leads').select('*').eq('id', leadIdHint).maybeSingle();
+    if (data) return data;
+  }
+
+  // Buscar por contato + canal
+  const { data: existente } = await supabase
+    .from('leads')
+    .select('*')
+    .eq('contato', contato)
+    .eq('canal', canal)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existente) return existente;
+
+  // Criar novo lead
+  const { data: novo, error } = await supabase
+    .from('leads')
+    .insert({ contato, canal, status_funil: 'novo' })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('[agente/buscarOuCriarLead]', error);
+    return null;
+  }
+  return novo;
+}
+
+// ─────────────────────────────────────────────────────────
+// HISTÓRICO DE CONVERSA
+// ─────────────────────────────────────────────────────────
+
+async function carregarHistorico(leadId, canal) {
+  const { data } = await supabase
+    .from('conversas')
+    .select('mensagens')
+    .eq('lead_id', leadId)
+    .eq('canal', canal)
+    .maybeSingle();
+
+  return Array.isArray(data?.mensagens) ? data.mensagens : [];
+}
+
+function historicoParaGPT(historico) {
+  // Manter últimas 20 trocas para não estourar contexto
+  return historico.slice(-40).map(m => ({
+    role:    m.role,
+    content: m.content || '',
+  }));
+}
+
+async function salvarMensagens(leadId, canal, novasMensagens) {
+  const { data: conversa } = await supabase
+    .from('conversas')
+    .select('id, mensagens')
+    .eq('lead_id', leadId)
+    .eq('canal', canal)
+    .maybeSingle();
+
+  const agora = new Date().toISOString();
+  const comTimestamp = novasMensagens.map(m => ({ ...m, timestamp: agora }));
+
+  if (conversa) {
+    const msgs = Array.isArray(conversa.mensagens) ? conversa.mensagens : [];
+    await supabase
+      .from('conversas')
+      .update({ mensagens: [...msgs, ...comTimestamp], ultima_mensagem_at: agora })
+      .eq('id', conversa.id);
+  } else {
+    await supabase.from('conversas').insert({
+      lead_id:           leadId,
+      canal,
+      mensagens:         comTimestamp,
+      ultima_mensagem_at: agora,
+    });
+  }
+
+  await supabase
+    .from('leads')
+    .update({ ultima_interacao: agora })
+    .eq('id', leadId);
+}
+
+// ─────────────────────────────────────────────────────────
+// ENVIO AO CLIENTE
+// ─────────────────────────────────────────────────────────
+
+async function enviarParaCliente(contato, canal, texto) {
+  if (!texto) return;
+
+  if (canal === 'whatsapp') {
+    await sendText(contato, texto);
+    return;
+  }
+
+  if (canal === 'instagram') {
+    // Fase 2 — Meta Graph API
+    console.log('[agente] Instagram DM: Fase 2 —', contato, texto.slice(0, 50));
+    return;
+  }
+}

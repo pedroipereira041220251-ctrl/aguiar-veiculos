@@ -15,31 +15,33 @@ router.get('/:placa', async (req, res) => {
 
   try {
     const { data: d } = await axios.get(
-      `https://apiplacas.com.br/api/v1/placa/${placa}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'User-Agent': 'Mozilla/5.0 (compatible; AguiarVeiculos/1.0)',
-          Accept: 'application/json',
-        },
-        timeout: 8000,
-      }
+      `https://wdapi2.com.br/consulta/${placa}/${token}`,
+      { timeout: 8000 }
     );
 
-    const modeloCompleto = [d.modelo, d.submodelo, d.versao]
+    const marca  = d.MARCA  || d.marca  || '';
+    const modelo = d.MODELO || d.modelo || '';
+    const sub    = d.SUBMODELO || d.submodelo || '';
+    const versao = d.VERSAO || d.versao || '';
+    const modeloCompleto = [modelo, sub, versao]
       .filter(Boolean)
       .filter((v, i, arr) => arr.indexOf(v) === i)
       .join(' ')
-      .trim() || d.modelo || '';
+      .trim() || modelo;
+
+    const fipeTexto = d.fipe?.dados?.[0]?.texto_valor || '';
+    const fipeValor = fipeTexto
+      ? parseFloat(fipeTexto.replace(/[^0-9,]/g, '').replace(',', '.'))
+      : null;
 
     return res.json({
       found:  true,
       placa,
-      marca:  d.marca  || '',
+      marca,
       modelo: modeloCompleto,
       ano:    parseInt(d.anoModelo || d.ano || 0, 10),
       cor:    d.cor    || '',
-      fipe:   d.fipe?.valor ? parseFloat(d.fipe.valor) : null,
+      fipe:   fipeValor,
     });
   } catch (err) {
     if (err.response?.status === 404) return res.json({ found: false });

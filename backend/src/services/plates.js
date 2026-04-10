@@ -12,36 +12,34 @@ export async function consultarPlaca(placa) {
 
   try {
     const { data: d } = await axios.get(
-      `https://apiplacas.com.br/api/v1/placa/${placaNorm}`,
-      {
-        params: { token },
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-          'Accept': 'application/json, text/plain, */*',
-          'Accept-Language': 'pt-BR,pt;q=0.9',
-          'Accept-Encoding': 'gzip, deflate, br',
-          'Referer': 'https://apiplacas.com.br/',
-          'Origin': 'https://apiplacas.com.br',
-        },
-        timeout: 10000,
-      }
+      `https://wdapi2.com.br/consulta/${placaNorm}/${token}`,
+      { timeout: 10000 }
     );
     console.log('[plates] resposta raw:', JSON.stringify(d));
 
-    const modeloCompleto = [d.modelo, d.submodelo, d.versao]
+    const marca  = d.MARCA  || d.marca  || '';
+    const modelo = d.MODELO || d.modelo || '';
+    const sub    = d.SUBMODELO || d.submodelo || '';
+    const versao = d.VERSAO || d.versao || '';
+    const modeloCompleto = [modelo, sub, versao]
       .filter(Boolean)
       .filter((v, i, arr) => arr.indexOf(v) === i)
       .join(' ')
-      .trim() || d.modelo || '';
+      .trim() || modelo;
+
+    const fipeTexto = d.fipe?.dados?.[0]?.texto_valor || '';
+    const fipeValor = fipeTexto
+      ? parseFloat(fipeTexto.replace(/[^0-9,]/g, '').replace(',', '.'))
+      : null;
 
     return {
       found:  true,
       placa:  placaNorm,
-      marca:  d.marca  || '',
+      marca,
       modelo: modeloCompleto,
       ano:    parseInt(d.anoModelo || d.ano || 0, 10),
       cor:    d.cor    || '',
-      fipe:   d.fipe?.valor ? parseFloat(d.fipe.valor) : null,
+      fipe:   fipeValor,
     };
   } catch (err) {
     if (err.response?.status === 404) {

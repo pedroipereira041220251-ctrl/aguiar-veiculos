@@ -319,7 +319,7 @@ async function handleCadastro(txt, data, norm, dados, canal, ownerId) {
 
   // ── Step 8: obs ───────────────────────────────────────
   if (step === 8) {
-    const obs = data === 'pular' ? null : txt;
+    const obs = (data === 'pular' || data === '1') ? null : txt;
     await upsertSession(canal, ownerId, { estado: 'cadastro', dados_parciais: { ...dados, step: 9, obs } });
     return buildConfirm(
       '📅 *Vencimento do IPVA* (MM/AAAA) opcional:',
@@ -329,7 +329,7 @@ async function handleCadastro(txt, data, norm, dados, canal, ownerId) {
 
   // ── Step 9: ipva_vencimento ───────────────────────────
   if (step === 9) {
-    const ipva = data === 'pular' ? null : txt;
+    const ipva = (data === 'pular' || data === '1') ? null : txt;
     await upsertSession(canal, ownerId, { estado: 'cadastro', dados_parciais: { ...dados, step: 10, ipva_vencimento: ipva } });
     return buildConfirm(
       '📋 *Transferência* já está em dia?',
@@ -342,7 +342,7 @@ async function handleCadastro(txt, data, norm, dados, canal, ownerId) {
 
   // ── Step 10: transferencia_ok → concluir ──────────────
   if (step === 10) {
-    const transf = data === 'sim';
+    const transf = (data === 'sim' || data === '1');
     const payload = { ...dados, transferencia_ok: transf };
     return finalizarCadastro(payload, canal, ownerId);
   }
@@ -431,7 +431,7 @@ async function handleCadastroFotos(data, norm, dados, canal, ownerId, body) {
   // Usuário recusou enviar fotos
   if (data === 'fotos_nao' || norm === 'concluir') {
     await resetSessao(canal, ownerId);
-    return txt_(`✅ *${dados.veiculo_label}* cadastrado com sucesso!\n\nAcesse o painel para adicionar fotos a qualquer momento.`);
+    return txt_(`✅ *${dados.veiculo_label}* cadastrado com sucesso!\n\nAcesse o painel para adicionar fotos a qualquer momento.\n\nMande /menu para continuar.`);
   }
 
   // Usuário quer adicionar fotos
@@ -957,6 +957,8 @@ async function finalizarVenda(dados, canal, ownerId) {
     ];
     if (dados.nome_vendedor)  linhas.push(`🧑‍💼 Vendedor: ${dados.nome_vendedor}`);
     if (dados.nome_comprador) linhas.push(`👤 Comprador: ${dados.nome_comprador}`);
+    linhas.push('');
+    linhas.push('Mande /menu para continuar.');
 
     return txt_(linhas.join('\n'));
   } catch (err) {
@@ -1057,52 +1059,64 @@ async function consultarLeads() {
 }
 
 async function consultarAlertas() {
-  const hoje = new Date().toISOString().slice(0, 10);
-  const { data: config } = await supabase.from('configuracoes').select('alerta_ipva_dias, alerta_parado_dias').eq('id', 1).single();
-  const diasIpva   = config?.alerta_ipva_dias   || 15;
-  const diasParado = config?.alerta_parado_dias  || 45;
+  try {
+    const hoje = new Date().toISOString().slice(0, 10);
+    const { data: config } = await supabase
+      .from('configuracoes')
+      .select('alerta_ipva_dias, alerta_parado_dias')
+      .eq('id', 1)
+      .maybeSingle();
+    const diasIpva   = config?.alerta_ipva_dias   || 15;
+    const diasParado = config?.alerta_parado_dias  || 45;
 
-  const limiteIpva = new Date(Date.now() + diasIpva * 86400000).toISOString().slice(0, 10);
-  const limiteParado = new Date(Date.now() - diasParado * 86400000).toISOString();
+    const limiteIpva   = new Date(Date.now() + diasIpva * 86400000).toISOString().slice(0, 10);
+    const limiteParado = new Date(Date.now() - diasParado * 86400000).toISOString();
 
-  const [{ data: ipva }, { data: parados }] = await Promise.all([
-    supabase
-      .from('documentacao_veiculo')
-      .select('ipva_vencimento, veiculos:veiculo_id(placa, modelo, status)')
-      .lte('ipva_vencimento', limiteIpva)
-      .gte('ipva_vencimento', hoje),
-    supabase
-      .from('veiculos')
-      .select('placa, modelo, updated_at')
-      .eq('status', 'disponivel')
-      .lte('updated_at', limiteParado),
-  ]);
+    const [{ data: ipva, error: errIpva }, { data: parados, error: errParados }] = await Promise.all([
+      supabase
+        .from('documentacao_veiculo')
+        .select('ipva_vencimento, veiculos:veiculo_id(placa, modelo, status)')
+        .lte('ipva_vencimento', limiteIpva)
+        .gte('ipva_vencimento', hoje),
+      supabase
+        .from('veiculos')
+        .select('placa, modelo, updated_at')
+        .eq('status', 'disponivel')
+        .lte('updated_at', limiteParado),
+    ]);
 
-  const ipvaAtivos   = (ipva || []).filter(i => i.veiculos?.status !== 'inativo');
-  const paradosAtivos = parados || [];
+    if (errIpva)    console.error('[consultarAlertas] ipva:', errIpva.message);
+    if (errParados) console.error('[consultarAlertas] parados:', errParados.message);
 
-  if (!ipvaAtivos.length && !paradosAtivos.length) return txt_('✅ Nenhum alerta ativo no momento.');
+    const ipvaAtivos    = (ipva    || []).filter(i => i.veiculos?.status !== 'inativo');
+    const paradosAtivos = parados  || [];
 
-  const linhas = ['🔔 *Alertas ativos*', ''];
+    if (!ipvaAtivos.length && !paradosAtivos.length) return txt_('✅ Nenhum alerta ativo no momento.');
 
-  if (ipvaAtivos.length) {
-    linhas.push(`🔴 *IPVA vencendo (${diasIpva} dias):* ${ipvaAtivos.length}`);
-    ipvaAtivos.slice(0, 3).forEach(i => {
-      linhas.push(`  • ${i.veiculos?.placa} — ${i.veiculos?.modelo} · vence ${i.ipva_vencimento}`);
-    });
-    linhas.push('');
+    const linhas = ['🔔 *Alertas ativos*', ''];
+
+    if (ipvaAtivos.length) {
+      linhas.push(`🔴 *IPVA vencendo (${diasIpva} dias):* ${ipvaAtivos.length}`);
+      ipvaAtivos.slice(0, 3).forEach(i => {
+        linhas.push(`  • ${i.veiculos?.placa} — ${i.veiculos?.modelo} · vence ${i.ipva_vencimento}`);
+      });
+      linhas.push('');
+    }
+
+    if (paradosAtivos.length) {
+      linhas.push(`🟡 *Parados > ${diasParado} dias:* ${paradosAtivos.length}`);
+      paradosAtivos.slice(0, 3).forEach(v => {
+        linhas.push(`  • ${v.placa} — ${v.modelo}`);
+      });
+      linhas.push('');
+    }
+
+    linhas.push('_Ver detalhes completos no painel._');
+    return txt_(linhas.join('\n'));
+  } catch (err) {
+    console.error('[consultarAlertas]', err.message);
+    return txt_('❌ Erro ao buscar alertas. Tente novamente.');
   }
-
-  if (paradosAtivos.length) {
-    linhas.push(`🟡 *Parados > ${diasParado} dias:* ${paradosAtivos.length}`);
-    paradosAtivos.slice(0, 3).forEach(v => {
-      linhas.push(`  • ${v.placa} — ${v.modelo}`);
-    });
-    linhas.push('');
-  }
-
-  linhas.push('_Ver detalhes completos no painel._');
-  return txt_(linhas.join('\n'));
 }
 
 // ─────────────────────────────────────────────────────────

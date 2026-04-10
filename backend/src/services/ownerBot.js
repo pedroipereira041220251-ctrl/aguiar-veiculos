@@ -446,51 +446,69 @@ async function handleCadastroFotos(data, norm, dados, canal, ownerId, body) {
     );
   }
 
-  // Chegou uma foto (Telegram: body.message?.photo)
+  // Chegou uma foto
   if (dados.aguardando_foto) {
+    // ── Telegram ──────────────────────────────────────────
     if (canal === 'telegram' && body?.message?.photo) {
-      // Pegar a maior resolução disponível
-      const fotos    = body.message.photo;
-      const melhor   = fotos[fotos.length - 1];
-      const fileId   = melhor.file_id;
-
+      const fotos  = body.message.photo;
+      const melhor = fotos[fotos.length - 1];
+      const fileId = melhor.file_id;
       try {
-        // Buscar URL da foto via Telegram API
-        const tgToken = process.env.TELEGRAM_BOT_TOKEN;
-        const axios   = (await import('axios')).default;
-        const fileRes = await axios.get(`https://api.telegram.org/bot${tgToken}/getFile?file_id=${fileId}`);
+        const tgToken  = process.env.TELEGRAM_BOT_TOKEN;
+        const axios    = (await import('axios')).default;
+        const fileRes  = await axios.get(`https://api.telegram.org/bot${tgToken}/getFile?file_id=${fileId}`);
         const filePath = fileRes.data?.result?.file_path;
         if (!filePath) throw new Error('file_path não retornado');
 
-        const fotoUrl  = `https://api.telegram.org/file/bot${tgToken}/${filePath}`;
-        const fotoResp = await axios.get(fotoUrl, { responseType: 'arraybuffer' });
+        const fotoResp = await axios.get(`https://api.telegram.org/file/bot${tgToken}/${filePath}`, { responseType: 'arraybuffer' });
         const buffer   = Buffer.from(fotoResp.data);
-
-        // Upload para Supabase Storage
         const ext      = filePath.split('.').pop() || 'jpg';
-        const storagePath = `${dados.veiculo_id}/${Date.now()}.${ext}`;
-
-        const { error: upErr } = await supabase.storage.from('fotos-veiculos').upload(storagePath, buffer, { contentType: `image/${ext}` });
-        if (upErr) throw upErr;
-
-        const { data: { publicUrl } } = supabase.storage.from('fotos-veiculos').getPublicUrl(storagePath);
-
-        // Buscar ordem atual
-        const { data: existentes } = await supabase.from('fotos_veiculo').select('ordem').eq('veiculo_id', dados.veiculo_id).order('ordem', { ascending: false }).limit(1);
-        const ordem = (existentes?.[0]?.ordem ?? -1) + 1;
-
-        await supabase.from('fotos_veiculo').insert({ veiculo_id: dados.veiculo_id, url: publicUrl, storage_path: storagePath, ordem });
-
-        return buildConfirm(
-          `✅ Foto ${ordem + 1} salva! Envie mais fotos ou conclua.`,
-          [{ label: '✅ Concluir', data: 'fotos_nao' }]
-        );
+        return await _salvarFoto(dados, buffer, ext, `image/${ext}`);
       } catch (err) {
-        console.error('[ownerBot/fotos]', err.message);
-        return buildConfirm(
-          '⚠️ Erro ao salvar foto. Tente outra ou conclua.',
-          [{ label: '✅ Concluir', data: 'fotos_nao' }]
-        );
+        console.error('[ownerBot/fotos/tg]', err.message);
+        return buildConfirm('⚠️ Erro ao salvar foto. Tente outra ou conclua.', [{ label: '✅ Concluir', data: 'fotos_nao' }]);
+      }
+    }
+
+    // ── WhatsApp (Z-API) ───────────────────────────────────
+    if (canal === 'whatsapp') {
+      const tipo    = (body?.type || '').toLowerCase();
+      const isImagem = tipo === 'image' || tipo === 'imagemessage' || tipo === 'sticker';
+
+      if (isImagem) {
+        // Z-API pode enviar a imagem como URL ou base64 em campos diferentes
+        const imageUrl =
+          body?.image?.url ||
+          body?.image?.imageMessage?.url ||
+          body?.downloadUrl ||
+          (typeof body?.image === 'string' && body.image.startsWith('http') ? body.image : null);
+
+        const base64Str =
+          typeof body?.image === 'string' && !body.image.startsWith('http') ? body.image : null;
+
+        console.log('[ownerBot/fotos/wa] imageUrl:', imageUrl?.slice(0, 80), '| hasBase64:', !!base64Str);
+
+        try {
+          let buffer, ext = 'jpg', contentType = 'image/jpeg';
+
+          if (base64Str) {
+            buffer = Buffer.from(base64Str, 'base64');
+          } else if (imageUrl) {
+            const axios    = (await import('axios')).default;
+            const fotoResp = await axios.get(imageUrl, { responseType: 'arraybuffer', timeout: 15000 });
+            buffer      = Buffer.from(fotoResp.data);
+            contentType = fotoResp.headers['content-type'] || 'image/jpeg';
+            ext         = contentType.split('/')[1]?.split(';')[0] || 'jpg';
+          } else {
+            console.warn('[ownerBot/fotos/wa] sem URL/base64. body.type:', body?.type, 'body.image keys:', Object.keys(body?.image || {}));
+            return buildConfirm('⚠️ Não consegui extrair a foto. Tente enviar novamente.', [{ label: '✅ Concluir', data: 'fotos_nao' }]);
+          }
+
+          return await _salvarFoto(dados, buffer, ext, contentType);
+        } catch (err) {
+          console.error('[ownerBot/fotos/wa]', err.message);
+          return buildConfirm('⚠️ Erro ao salvar foto. Tente outra ou conclua.', [{ label: '✅ Concluir', data: 'fotos_nao' }]);
+        }
       }
     }
 
@@ -503,6 +521,42 @@ async function handleCadastroFotos(data, norm, dados, canal, ownerId, body) {
 
   await resetSessao(canal, ownerId);
   return buildMenuPrincipal(canal);
+}
+
+// ─────────────────────────────────────────────────────────
+// HELPER: salvar foto no Supabase Storage
+// ─────────────────────────────────────────────────────────
+
+async function _salvarFoto(dados, buffer, ext, contentType) {
+  const storagePath = `${dados.veiculo_id}/${Date.now()}.${ext}`;
+  const { error: upErr } = await supabase.storage
+    .from('fotos-veiculos')
+    .upload(storagePath, buffer, { contentType });
+  if (upErr) throw upErr;
+
+  const { data: { publicUrl } } = supabase.storage
+    .from('fotos-veiculos')
+    .getPublicUrl(storagePath);
+
+  const { data: existentes } = await supabase
+    .from('fotos_veiculo')
+    .select('ordem')
+    .eq('veiculo_id', dados.veiculo_id)
+    .order('ordem', { ascending: false })
+    .limit(1);
+  const ordem = (existentes?.[0]?.ordem ?? -1) + 1;
+
+  await supabase.from('fotos_veiculo').insert({
+    veiculo_id:   dados.veiculo_id,
+    url:          publicUrl,
+    storage_path: storagePath,
+    ordem,
+  });
+
+  return buildConfirm(
+    `✅ Foto ${ordem + 1} salva! Envie mais fotos ou conclua.`,
+    [{ label: '✅ Concluir', data: 'fotos_nao' }]
+  );
 }
 
 // ─────────────────────────────────────────────────────────

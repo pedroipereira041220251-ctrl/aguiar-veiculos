@@ -77,7 +77,7 @@ export async function handler({ text, canal, owner_id, body }) {
     if (data === 'estoque'     || norm === 'ver estoque' || norm === 'estoque')       return consultarEstoque();
     if (data === 'financeiro'  || norm === 'financeiro')                              return consultarFinanceiro();
     if (data === 'leads'       || norm === 'leads de hoje' || norm === 'leads')       return consultarLeads();
-    if (data === 'alertas'     || norm === 'alertas')                                 return consultarAlertas();
+    if (data === 'alertas'     || norm === 'alertas' || norm === 'alerta')            return consultarAlertas();
 
     // Texto livre sem sessão → mostrar menu
     return buildMenuPrincipal(canal);
@@ -586,6 +586,7 @@ async function handleEdicao(txt, data, norm, dados, canal, ownerId) {
       .maybeSingle();
 
     if (!veiculo) return txt_(`⚠️ Veículo *${placa}* não encontrado. Tente outra placa:`);
+    if (veiculo.status === 'vendido') return txt_(`⚠️ *${placa}* já foi vendido e não pode ser editado.`);
 
     await upsertSession(canal, ownerId, {
       estado: 'edicao',
@@ -672,12 +673,13 @@ async function handleCusto(txt, data, norm, dados, canal, ownerId) {
 
     const { data: veiculo } = await supabase
       .from('vw_veiculos_com_financeiro')
-      .select('id, modelo, ano, preco_venda, investimento_total, lucro_estimado')
+      .select('id, modelo, ano, preco_venda, investimento_total, lucro_estimado, status')
       .eq('placa', placa)
       .neq('status', 'inativo')
       .maybeSingle();
 
     if (!veiculo) return txt_(`⚠️ Veículo *${placa}* não encontrado. Tente outra placa:`);
+    if (veiculo.status === 'vendido') return txt_(`⚠️ *${placa}* já foi vendido. Não é possível lançar custos.`);
 
     await upsertSession(canal, ownerId, {
       estado: 'custo',
@@ -869,7 +871,25 @@ async function handleVenda(txt, data, norm, dados, canal, ownerId) {
   if (step === 2) {
     const val = parseValor(txt);
     if (!val || val <= 0) return txt_('⚠️ Valor inválido. Ex: 52000 ou 52.000,00');
-    await upsertSession(canal, ownerId, { estado: 'venda', dados_parciais: { ...dados, step: 3, preco_venda_final: val } });
+    await upsertSession(canal, ownerId, { estado: 'venda', dados_parciais: { ...dados, step: '2_pagamento', preco_venda_final: val } });
+    return buildConfirm(
+      '💳 *Forma de pagamento:*',
+      [
+        { label: '💵 À vista',       data: 'a_vista'       },
+        { label: '🏦 Financiamento', data: 'financiamento' },
+        { label: '🔄 Consórcio',     data: 'consorcio'     },
+        { label: '⏭️ Pular',        data: 'pular'         },
+      ]
+    );
+  }
+
+  // ── Step 2_pagamento: forma de pagamento ──────────────
+  if (step === '2_pagamento') {
+    const MAP = { '1': 'a_vista', '2': 'financiamento', '3': 'consorcio', '4': 'pular' };
+    if (MAP[data]) data = MAP[data];
+    const formaMap: Record<string, string> = { a_vista: 'À vista', financiamento: 'Financiamento', consorcio: 'Consórcio' };
+    const forma = formaMap[data] || (data === 'pular' ? null : txt) || null;
+    await upsertSession(canal, ownerId, { estado: 'venda', dados_parciais: { ...dados, step: 3, forma_pagamento: forma } });
     return buildConfirm(
       '🧑‍💼 *Nome do vendedor?*',
       [
@@ -955,8 +975,9 @@ async function finalizarVenda(dados, canal, ownerId) {
       `💵 Valor recebido: ${fmt(dados.preco_venda_final)}`,
       `📈 Lucro real: ${fmt(lucroReal)} (${margem}%)`,
     ];
-    if (dados.nome_vendedor)  linhas.push(`🧑‍💼 Vendedor: ${dados.nome_vendedor}`);
-    if (dados.nome_comprador) linhas.push(`👤 Comprador: ${dados.nome_comprador}`);
+    if (dados.forma_pagamento) linhas.push(`💳 Pagamento: ${dados.forma_pagamento}`);
+    if (dados.nome_vendedor)   linhas.push(`🧑‍💼 Vendedor: ${dados.nome_vendedor}`);
+    if (dados.nome_comprador)  linhas.push(`👤 Comprador: ${dados.nome_comprador}`);
     linhas.push('');
     linhas.push('Mande /menu para continuar.');
 
@@ -988,20 +1009,15 @@ async function consultarEstoque() {
   const totalInv  = disp.reduce((s, v) => s + Number(v.investimento_total), 0);
   const totalLucro = disp.reduce((s, v) => s + Number(v.lucro_estimado), 0);
 
-  const lista = disp.slice(0, 8).map(v =>
-    `• ${v.placa} — ${v.modelo} ${v.ano} · ${fmt(v.preco_venda)}`
+  const lista = disp.slice(0, 6).map((v, i) =>
+    `${i + 1}. ${v.placa} · ${v.modelo} ${v.ano} · ${fmt(v.preco_venda)}`
   ).join('\n');
 
   return txt_([
-    `📦 *Estoque Atual*`,
-    ``,
-    `🟢 Disponível: ${disp.length} · 🟡 Reservado: ${res.length} · ✅ Vendido: ${vend.length}`,
-    ``,
-    `💰 Total investido: ${fmt(totalInv)}`,
-    `📈 Lucro potencial: ${fmt(totalLucro)}`,
-    ``,
-    disp.length ? `*Disponíveis:*\n${lista}` : '',
-    disp.length > 8 ? `_...e mais ${disp.length - 8} veículos. Ver detalhes no painel._` : '',
+    `📦 *Estoque* — ${disp.length} disp · ${res.length} res · ${vend.length} vend`,
+    `💰 Investido: ${fmt(totalInv)} · Lucro potencial: ${fmt(totalLucro)}`,
+    disp.length ? `\n${lista}` : '',
+    disp.length > 6 ? `_+${disp.length - 6} no painel_` : '',
   ].filter(Boolean).join('\n'));
 }
 
@@ -1072,33 +1088,48 @@ async function consultarAlertas() {
     const limiteIpva   = new Date(Date.now() + diasIpva * 86400000).toISOString().slice(0, 10);
     const limiteParado = new Date(Date.now() - diasParado * 86400000).toISOString();
 
-    const [{ data: ipva, error: errIpva }, { data: parados, error: errParados }] = await Promise.all([
-      supabase
-        .from('documentacao_veiculo')
-        .select('ipva_vencimento, veiculos:veiculo_id(placa, modelo, status)')
-        .lte('ipva_vencimento', limiteIpva)
-        .gte('ipva_vencimento', hoje),
-      supabase
-        .from('veiculos')
-        .select('placa, modelo, updated_at')
-        .eq('status', 'disponivel')
-        .lte('updated_at', limiteParado),
-    ]);
+    // ── IPVA: busca docs separada de veículos (evita join PostgREST) ──
+    const { data: ipvaDocs, error: errIpva } = await supabase
+      .from('documentacao_veiculo')
+      .select('ipva_vencimento, veiculo_id')
+      .not('ipva_vencimento', 'is', null)
+      .lte('ipva_vencimento', limiteIpva)
+      .gte('ipva_vencimento', hoje);
+
+    const { data: parados, error: errParados } = await supabase
+      .from('veiculos')
+      .select('placa, modelo, updated_at')
+      .eq('status', 'disponivel')
+      .lte('updated_at', limiteParado);
 
     if (errIpva)    console.error('[consultarAlertas] ipva:', errIpva.message);
     if (errParados) console.error('[consultarAlertas] parados:', errParados.message);
 
-    const ipvaAtivos    = (ipva    || []).filter(i => i.veiculos?.status !== 'inativo');
-    const paradosAtivos = parados  || [];
+    // Buscar infos dos veículos com IPVA vencendo
+    let ipvaAtivos = [];
+    if (ipvaDocs?.length) {
+      const ids = ipvaDocs.map(d => d.veiculo_id);
+      const { data: veiculosIpva } = await supabase
+        .from('veiculos')
+        .select('id, placa, modelo, status')
+        .in('id', ids)
+        .neq('status', 'inativo');
+
+      ipvaAtivos = ipvaDocs
+        .map(d => ({ ...d, veiculo: veiculosIpva?.find(v => v.id === d.veiculo_id) }))
+        .filter(d => d.veiculo);
+    }
+
+    const paradosAtivos = parados || [];
 
     if (!ipvaAtivos.length && !paradosAtivos.length) return txt_('✅ Nenhum alerta ativo no momento.');
 
     const linhas = ['🔔 *Alertas ativos*', ''];
 
     if (ipvaAtivos.length) {
-      linhas.push(`🔴 *IPVA vencendo (${diasIpva} dias):* ${ipvaAtivos.length}`);
+      linhas.push(`🔴 *IPVA vencendo (próx. ${diasIpva} dias):* ${ipvaAtivos.length}`);
       ipvaAtivos.slice(0, 3).forEach(i => {
-        linhas.push(`  • ${i.veiculos?.placa} — ${i.veiculos?.modelo} · vence ${i.ipva_vencimento}`);
+        linhas.push(`  • ${i.veiculo.placa} — ${i.veiculo.modelo} · vence ${i.ipva_vencimento}`);
       });
       linhas.push('');
     }

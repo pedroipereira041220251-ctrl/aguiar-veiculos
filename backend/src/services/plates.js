@@ -32,6 +32,9 @@ export async function consultarPlaca(placa) {
       ? parseFloat(fipeTexto.replace(/[^0-9,]/g, '').replace(',', '.'))
       : null;
 
+    // Se a API retornou 200 mas sem dados essenciais → placa não encontrada
+    if (!marca || !modeloCompleto) return { found: false };
+
     return {
       found:  true,
       placa:  placaNorm,

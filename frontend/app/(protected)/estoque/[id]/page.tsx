@@ -61,13 +61,15 @@ export default function VeiculoDetailPage() {
     if (!veiculo) return;
     setSalvandoEdit(true);
     try {
-      const updated = await api.veiculos.editar(id, {
+      await api.veiculos.editar(id, {
         placa: editForm.placa, marca: editForm.marca, modelo: editForm.modelo,
         ano: Number(editForm.ano), cor: editForm.cor, km: Number(editForm.km),
         preco_compra: Number(editForm.preco_compra), preco_venda: Number(editForm.preco_venda),
         obs: editForm.obs || undefined,
       });
-      setVeiculo(p => p ? { ...p, ...updated } : p);
+      // Rebusca da view para atualizar lucro estimado e outros campos calculados
+      const atualizado = await api.veiculos.buscar(id);
+      setVeiculo(p => p ? { ...p, ...atualizado } : p);
       setEditando(false);
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Erro ao salvar.');
@@ -78,8 +80,10 @@ export default function VeiculoDetailPage() {
     e.preventDefault();
     setSalvandoCusto(true);
     try {
+      const valorNum = parseFloat(custoForm.valor.replace(/\./g, '').replace(',', '.'));
+      if (!valorNum || valorNum <= 0) { alert('Insira um valor válido (ex: 500 ou 1.500,00)'); setSalvandoCusto(false); return; }
       const res = await api.veiculos.custos.criar(id, {
-        tipo: custoForm.tipo, valor: Number(custoForm.valor),
+        tipo: custoForm.tipo, valor: valorNum,
         descricao: custoForm.descricao || undefined, criado_via: 'painel',
       }) as { custo: Custo; financeiro: { total_custos: number; investimento_total: number; lucro_estimado: number; margem_pct: number } };
       setVeiculo(p => {
@@ -399,6 +403,14 @@ export default function VeiculoDetailPage() {
             </div>
             {veiculo.documentacao ? (
               <div className="grid grid-cols-2 gap-2">
+                {veiculo.documentacao.ipva_vencimento && (
+                  <div className="col-span-2 flex items-center gap-2 px-1 py-1">
+                    <AlertCircle size={14} className={new Date(veiculo.documentacao.ipva_vencimento) < new Date() ? 'text-red-400' : 'text-yellow-400'} />
+                    <span className="text-sm text-text-primary">
+                      IPVA vence em {new Date(veiculo.documentacao.ipva_vencimento).toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' })}
+                    </span>
+                  </div>
+                )}
                 {([
                   ['transferencia_ok', 'Transferência'],
                   ['laudo_vistoria_ok', 'Laudo vistoria'],
@@ -458,10 +470,10 @@ export default function VeiculoDetailPage() {
                   className={INPUT}
                 />
                 <input
-                  required type="number" min={0.01}
+                  required
                   value={custoForm.valor}
                   onChange={e => setCustoForm(p => ({ ...p, valor: e.target.value }))}
-                  placeholder="Valor (R$)"
+                  placeholder="Valor (ex: 500 ou 1.500,00)"
                   className={INPUT}
                 />
               </div>

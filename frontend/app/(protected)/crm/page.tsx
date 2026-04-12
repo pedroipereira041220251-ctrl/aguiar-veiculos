@@ -8,7 +8,10 @@ import {
 import { useDroppable, useDraggable } from '@dnd-kit/core';
 import { api, type Lead } from '@/lib/api';
 import { FUNIL_LABEL, cn } from '@/lib/utils';
-import { Users, Handshake, RefreshCw, UserCheck } from 'lucide-react';
+import { Users, Handshake, RefreshCw, UserCheck, X, MessageSquare, Phone, Instagram } from 'lucide-react';
+
+type Mensagem = { role: string; content: string; timestamp: string; tipo?: string };
+type LeadDetalhe = Lead & { conversas: { mensagens: Mensagem[]; canal: string; ultima_mensagem_at: string }[] };
 
 const COLUNAS: Lead['status_funil'][] = [
   'novo', 'contato', 'visita', 'proposta', 'fechado', 'perdido',
@@ -41,11 +44,13 @@ const COR_SCORE: Record<number, string> = {
 };
 
 export default function CRMPage() {
-  const [leads, setLeads]         = useState<Lead[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [erro, setErro]           = useState(false);
-  const [activeId, setActiveId]   = useState<string | null>(null);
-  const [assumindo, setAssumindo] = useState<string | null>(null);
+  const [leads, setLeads]               = useState<Lead[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [erro, setErro]                 = useState(false);
+  const [activeId, setActiveId]         = useState<string | null>(null);
+  const [assumindo, setAssumindo]       = useState<string | null>(null);
+  const [drawerLead, setDrawerLead]     = useState<LeadDetalhe | null>(null);
+  const [loadingDrawer, setLoadingDrawer] = useState(false);
 
   // Ref sempre atualizado — evita stale closure em handleDragEnd
   const leadsRef = useRef<Lead[]>([]);
@@ -95,6 +100,16 @@ export default function CRMPage() {
       await api.leads.editar(leadId, { status_funil: novoStatus });
     } catch {
       setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status_funil: lead.status_funil } : l));
+    }
+  }
+
+  async function abrirDrawer(leadId: string) {
+    setLoadingDrawer(true);
+    try {
+      const detalhe = await api.leads.buscar(leadId) as LeadDetalhe;
+      setDrawerLead(detalhe);
+    } catch { /* ignora */ } finally {
+      setLoadingDrawer(false);
     }
   }
 
@@ -160,6 +175,7 @@ export default function CRMPage() {
                 activeId={activeId}
                 onAssumir={assumir}
                 assumindo={assumindo}
+                onAbrir={abrirDrawer}
               />
             ))}
           </div>
@@ -177,6 +193,7 @@ export default function CRMPage() {
                   activeId={activeId}
                   onAssumir={assumir}
                   assumindo={assumindo}
+                  onAbrir={abrirDrawer}
                   mobile
                 />
               );
@@ -190,22 +207,67 @@ export default function CRMPage() {
                 lead={activeLead}
                 onAssumir={() => {}}
                 assumindo={null}
+                onAbrir={() => {}}
                 floating
               />
             )}
           </DragOverlay>
         </DndContext>
       )}
+
+      {/* ── Drawer de histórico ── */}
+      {(drawerLead || loadingDrawer) && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setDrawerLead(null)} />
+          <div className="relative w-full max-w-sm bg-background border-l border-border flex flex-col h-full shadow-2xl animate-fade-in">
+            <div className="px-4 py-3 border-b border-border flex items-center justify-between flex-shrink-0">
+              <div>
+                <p className="font-semibold text-text-primary text-sm">{drawerLead?.nome || drawerLead?.contato}</p>
+                <p className="text-xs text-text-muted capitalize">{drawerLead?.canal} · Score {drawerLead?.score_qualificacao ?? '—'}</p>
+              </div>
+              <button onClick={() => setDrawerLead(null)} className="p-1 text-text-muted hover:text-text-primary">
+                <X size={18} />
+              </button>
+            </div>
+
+            {loadingDrawer ? (
+              <div className="flex-1 flex items-center justify-center">
+                <p className="text-sm text-text-muted">Carregando...</p>
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                {drawerLead?.conversas?.flatMap(c => c.mensagens).length === 0 ? (
+                  <p className="text-sm text-text-muted text-center py-8">Nenhuma mensagem registrada.</p>
+                ) : (
+                  drawerLead?.conversas?.flatMap(c => c.mensagens).map((msg, i) => (
+                    <div
+                      key={i}
+                      className={cn('max-w-[85%] px-3 py-2 rounded-xl text-sm', msg.role === 'user'
+                        ? 'bg-white/5 border border-border text-text-primary self-start'
+                        : 'bg-primary/10 border border-primary/20 text-primary ml-auto'
+                      )}
+                    >
+                      <p className="leading-snug">{String(msg.content)}</p>
+                      <p className="text-[10px] text-text-muted mt-1">{new Date(msg.timestamp).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function Coluna({ id, leads, activeId, onAssumir, assumindo, mobile }: {
+function Coluna({ id, leads, activeId, onAssumir, assumindo, onAbrir, mobile }: {
   id: Lead['status_funil'];
   leads: Lead[];
   activeId: string | null;
   onAssumir: (id: string) => void;
   assumindo: string | null;
+  onAbrir: (id: string) => void;
   mobile?: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id });
@@ -236,6 +298,7 @@ function Coluna({ id, leads, activeId, onAssumir, assumindo, mobile }: {
             isDraggingThis={activeId === lead.id}
             onAssumir={onAssumir}
             assumindo={assumindo}
+            onAbrir={onAbrir}
           />
         ))}
       </div>
@@ -244,11 +307,12 @@ function Coluna({ id, leads, activeId, onAssumir, assumindo, mobile }: {
 }
 
 // ── LeadCard: wrapper com useDraggable ─────────────────────
-function LeadCard({ lead, isDraggingThis, onAssumir, assumindo }: {
+function LeadCard({ lead, isDraggingThis, onAssumir, assumindo, onAbrir }: {
   lead: Lead;
   isDraggingThis: boolean;
   onAssumir: (id: string) => void;
   assumindo: string | null;
+  onAbrir: (id: string) => void;
 }) {
   const { attributes, listeners, setNodeRef } = useDraggable({ id: lead.id });
 
@@ -263,25 +327,28 @@ function LeadCard({ lead, isDraggingThis, onAssumir, assumindo }: {
         lead={lead}
         onAssumir={onAssumir}
         assumindo={assumindo}
+        onAbrir={onAbrir}
       />
     </div>
   );
 }
 
 // ── LeadCardContent: visual puro, sem hooks de drag ────────
-function LeadCardContent({ lead, onAssumir, assumindo, floating }: {
+function LeadCardContent({ lead, onAssumir, assumindo, onAbrir, floating }: {
   lead: Lead;
   onAssumir: (id: string) => void;
   assumindo: string | null;
+  onAbrir: (id: string) => void;
   floating?: boolean;
 }) {
   return (
     <div
+      onClick={!floating ? () => onAbrir(lead.id) : undefined}
       className={cn(
         'bg-card-hover border border-border rounded-xl p-3 select-none',
         floating
           ? 'shadow-2xl border-primary/30 cursor-grabbing rotate-1 opacity-95'
-          : 'cursor-grab',
+          : 'cursor-grab hover:border-primary/40 transition-colors',
       )}
     >
       <p className="text-sm font-semibold text-text-primary leading-tight truncate">

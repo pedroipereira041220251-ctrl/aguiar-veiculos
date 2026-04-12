@@ -887,7 +887,7 @@ async function handleVenda(txt, data, norm, dados, canal, ownerId) {
   if (step === '2_pagamento') {
     const MAP = { '1': 'a_vista', '2': 'financiamento', '3': 'consorcio', '4': 'pular' };
     if (MAP[data]) data = MAP[data];
-    const formaMap: Record<string, string> = { a_vista: 'À vista', financiamento: 'Financiamento', consorcio: 'Consórcio' };
+    const formaMap = { a_vista: 'À vista', financiamento: 'Financiamento', consorcio: 'Consórcio' };
     const forma = formaMap[data] || (data === 'pular' ? null : txt) || null;
     await upsertSession(canal, ownerId, { estado: 'venda', dados_parciais: { ...dados, step: 3, forma_pagamento: forma } });
     return buildConfirm(

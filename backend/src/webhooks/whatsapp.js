@@ -118,6 +118,9 @@ async function rotearDono(phone, texto, body) {
 
 // ── rotearCliente ──────────────────────────────────────────
 async function rotearCliente(phone, texto, body, isStory) {
+  // Modo de teste: se TEST_CLIENT_PHONE estiver definido, ignora qualquer outro número
+  const testPhone = (process.env.TEST_CLIENT_PHONE || '').replace(/\D/g, '');
+  if (testPhone && phone.replace(/\D/g, '') !== testPhone) return;
   // Buscar lead pelo número
   const { data: lead } = await supabase
     .from('leads')

@@ -444,6 +444,9 @@ async function executarHandoff(leadId, motivo, resumo, contato, canal) {
 // ─────────────────────────────────────────────────────────
 
 async function verificarHorario() {
+  // Modo 24h temporário: definir HORARIO_24H=true no Railway para bypassar
+  if (process.env.HORARIO_24H === 'true') return true;
+
   const { data: cfg } = await supabase
     .from('configuracoes')
     .select('horario_inicio, horario_fim, dias_semana')

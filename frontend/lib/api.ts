@@ -75,6 +75,11 @@ export const api = {
     salvar:      (body: Partial<Config>) => req<Config>('/api/config', { method: 'PATCH', body: JSON.stringify(body) }),
     botsStatus:  () => req<BotsStatus>('/api/config/bots/status'),
   },
+
+  vendedores: {
+    listar:  () => req<VendedorResumo[]>('/api/vendedores'),
+    vendas:  (nome: string) => req<VendaVendedor[]>(`/api/vendedores/${encodeURIComponent(nome)}`),
+  },
 };
 
 // ── Types ──────────────────────────────────────────────────
@@ -157,4 +162,17 @@ export interface Alerta {
   tipo: 'ipva_vencendo' | 'docs_pendentes' | 'veiculo_parado';
   urgencia: 'alta' | 'media'; cor: string; veiculo_id: string;
   placa: string; descricao: string;
+}
+
+export interface VendedorResumo {
+  nome_vendedor: string;
+  qtd_vendas: number;
+  total_vendas: number;
+  comissao: number;
+}
+
+export interface VendaVendedor {
+  id: string; placa: string; modelo: string; ano: number;
+  data_venda?: string; preco_venda_final?: number;
+  nome_comprador?: string; comissao: number;
 }

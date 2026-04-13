@@ -10,6 +10,7 @@ import financeiroRouter from './routes/financeiro.js';
 import placasRouter from './routes/placas.js';
 import alertasRouter from './routes/alertas.js';
 import configRouter from './routes/config.js';
+import vendedoresRouter from './routes/vendedores.js';
 import whatsappWebhook from './webhooks/whatsapp.js';
 import telegramWebhook from './webhooks/telegram.js';
 import { iniciarCronResumoSemanal } from './services/resumoSemanal.js';
@@ -46,6 +47,7 @@ app.use('/api/financeiro', financeiroRouter);
 app.use('/api/placas',   placasRouter);
 app.use('/api/alertas',  alertasRouter);
 app.use('/api/config',   configRouter);
+app.use('/api/vendedores', vendedoresRouter);
 
 // ── Webhooks ───────────────────────────────────────────────
 app.use('/webhooks/whatsapp', whatsappWebhook);

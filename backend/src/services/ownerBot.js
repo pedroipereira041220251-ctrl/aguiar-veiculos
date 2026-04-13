@@ -473,7 +473,10 @@ async function handleCadastroFotos(data, norm, dados, canal, ownerId, body) {
     // ── WhatsApp (Z-API) ───────────────────────────────────
     if (canal === 'whatsapp') {
       const tipo    = (body?.type || '').toLowerCase();
-      const isImagem = tipo === 'image' || tipo === 'imagemessage' || tipo === 'sticker';
+      // Z-API reporta type='ReceivedCallback' para qualquer msg; detectar imagem pelo conteúdo
+      const isImagem = tipo === 'image' || tipo === 'imagemessage' || tipo === 'sticker'
+        || body?.image != null
+        || body?.message?.imageMessage != null;
 
       if (isImagem) {
         // Z-API pode enviar a imagem como URL ou base64 em campos diferentes
@@ -586,7 +589,10 @@ async function handleEdicao(txt, data, norm, dados, canal, ownerId) {
       .maybeSingle();
 
     if (!veiculo) return txt_(`⚠️ Veículo *${placa}* não encontrado. Tente outra placa:`);
-    if (veiculo.status === 'vendido') return txt_(`⚠️ *${placa}* já foi vendido e não pode ser editado.`);
+    if (veiculo.status === 'vendido') {
+      await resetSessao(canal, ownerId);
+      return txt_(`⚠️ *${placa}* já foi vendido e não pode ser editado.\n\nMande /menu para continuar.`);
+    }
 
     await upsertSession(canal, ownerId, {
       estado: 'edicao',
@@ -679,7 +685,10 @@ async function handleCusto(txt, data, norm, dados, canal, ownerId) {
       .maybeSingle();
 
     if (!veiculo) return txt_(`⚠️ Veículo *${placa}* não encontrado. Tente outra placa:`);
-    if (veiculo.status === 'vendido') return txt_(`⚠️ *${placa}* já foi vendido. Não é possível lançar custos.`);
+    if (veiculo.status === 'vendido') {
+      await resetSessao(canal, ownerId);
+      return txt_(`⚠️ *${placa}* já foi vendido. Não é possível lançar custos.\n\nMande /menu para continuar.`);
+    }
 
     await upsertSession(canal, ownerId, {
       estado: 'custo',
@@ -891,57 +900,28 @@ async function handleVenda(txt, data, norm, dados, canal, ownerId) {
     const forma = formaMap[data] || (data === 'pular' ? null : txt) || null;
     await upsertSession(canal, ownerId, { estado: 'venda', dados_parciais: { ...dados, step: 3, forma_pagamento: forma } });
     return buildConfirm(
-      '🧑‍💼 *Nome do vendedor?*',
-      [
-        { label: '🧑‍💼 Informar', data: 'informar' },
-        { label: '⏭️ Pular',     data: 'pular'    },
-      ]
+      '🧑‍💼 *Nome do vendedor?*\n_(Digite o nome ou clique Pular)_',
+      [{ label: '⏭️ Pular', data: 'pular' }]
     );
   }
 
-  // ── Step 3: vendedor ──────────────────────────────────
+  // ── Step 3: vendedor (digita nome diretamente ou 'pular'/'1') ──
   if (step === 3) {
-    if (data === '1') data = 'informar';
-    if (data === '2') data = 'pular';
-    if (data === 'informar' || norm === 'informar') {
-      await upsertSession(canal, ownerId, { estado: 'venda', dados_parciais: { ...dados, step: '3_vendedor' } });
-      return txt_('Digite o nome do vendedor:');
+    if (data === '1' || data === 'pular' || norm === 'pular') {
+      await upsertSession(canal, ownerId, { estado: 'venda', dados_parciais: { ...dados, step: 4, nome_vendedor: null } });
+    } else {
+      await upsertSession(canal, ownerId, { estado: 'venda', dados_parciais: { ...dados, step: 4, nome_vendedor: txt } });
     }
-    // pular → ir para comprador
-    await upsertSession(canal, ownerId, { estado: 'venda', dados_parciais: { ...dados, step: 4, nome_vendedor: null } });
     return buildConfirm(
-      '👤 *Nome do comprador?*',
-      [
-        { label: '👤 Informar', data: 'informar' },
-        { label: '⏭️ Pular',   data: 'pular'    },
-      ]
+      '👤 *Nome do comprador?*\n_(Digite o nome ou clique Pular)_',
+      [{ label: '⏭️ Pular', data: 'pular' }]
     );
   }
 
-  if (step === '3_vendedor') {
-    await upsertSession(canal, ownerId, { estado: 'venda', dados_parciais: { ...dados, step: 4, nome_vendedor: txt } });
-    return buildConfirm(
-      '👤 *Nome do comprador?*',
-      [
-        { label: '👤 Informar', data: 'informar' },
-        { label: '⏭️ Pular',   data: 'pular'    },
-      ]
-    );
-  }
-
-  // ── Step 4: nome comprador → finalizar ────────────────
+  // ── Step 4: comprador → finalizar ─────────────────────
   if (step === 4) {
-    if (data === '1') data = 'informar';
-    if (data === '2') data = 'pular';
-    if (data === 'informar' || norm === 'informar') {
-      await upsertSession(canal, ownerId, { estado: 'venda', dados_parciais: { ...dados, step: '4_nome' } });
-      return txt_('Digite o nome do comprador:');
-    }
-    return finalizarVenda({ ...dados, nome_comprador: null }, canal, ownerId);
-  }
-
-  if (step === '4_nome') {
-    return finalizarVenda({ ...dados, nome_comprador: txt }, canal, ownerId);
+    const nomeComprador = (data === '1' || data === 'pular' || norm === 'pular') ? null : txt;
+    return finalizarVenda({ ...dados, nome_comprador: nomeComprador }, canal, ownerId);
   }
 
   return buildMenuPrincipal(canal);
@@ -1105,6 +1085,32 @@ async function consultarAlertas() {
     if (errIpva)    console.error('[consultarAlertas] ipva:', errIpva.message);
     if (errParados) console.error('[consultarAlertas] parados:', errParados.message);
 
+    // ── Docs pendentes ────────────────────────────────────
+    const { data: docsPend } = await supabase
+      .from('documentacao_veiculo')
+      .select('veiculo_id, transferencia_ok, laudo_vistoria_ok, dut_ok, crlv_ok')
+      .or('transferencia_ok.eq.false,laudo_vistoria_ok.eq.false,dut_ok.eq.false,crlv_ok.eq.false');
+
+    let docsAtivos = [];
+    if (docsPend?.length) {
+      const ids = docsPend.map(d => d.veiculo_id);
+      const { data: veiculosDocs } = await supabase
+        .from('veiculos').select('id, placa, modelo, status')
+        .in('id', ids).eq('status', 'disponivel');
+      docsAtivos = docsPend
+        .map(d => {
+          const veiculo = veiculosDocs?.find(v => v.id === d.veiculo_id);
+          if (!veiculo) return null;
+          const pendentes = [];
+          if (!d.transferencia_ok)   pendentes.push('Transferência');
+          if (!d.laudo_vistoria_ok)  pendentes.push('Laudo');
+          if (!d.dut_ok)             pendentes.push('DUT');
+          if (!d.crlv_ok)            pendentes.push('CRLV');
+          return pendentes.length ? { veiculo, pendentes } : null;
+        })
+        .filter(Boolean);
+    }
+
     // Buscar infos dos veículos com IPVA vencendo
     let ipvaAtivos = [];
     if (ipvaDocs?.length) {
@@ -1122,7 +1128,7 @@ async function consultarAlertas() {
 
     const paradosAtivos = parados || [];
 
-    if (!ipvaAtivos.length && !paradosAtivos.length) return txt_('✅ Nenhum alerta ativo no momento.');
+    if (!ipvaAtivos.length && !docsAtivos.length && !paradosAtivos.length) return txt_('✅ Nenhum alerta ativo no momento.');
 
     const linhas = ['🔔 *Alertas ativos*', ''];
 
@@ -1130,6 +1136,14 @@ async function consultarAlertas() {
       linhas.push(`🔴 *IPVA vencendo (próx. ${diasIpva} dias):* ${ipvaAtivos.length}`);
       ipvaAtivos.slice(0, 3).forEach(i => {
         linhas.push(`  • ${i.veiculo.placa} — ${i.veiculo.modelo} · vence ${i.ipva_vencimento}`);
+      });
+      linhas.push('');
+    }
+
+    if (docsAtivos.length) {
+      linhas.push(`🟡 *Documentação pendente:* ${docsAtivos.length}`);
+      docsAtivos.slice(0, 3).forEach(d => {
+        linhas.push(`  • ${d.veiculo.placa} — ${d.veiculo.modelo} · ${d.pendentes.join(', ')}`);
       });
       linhas.push('');
     }

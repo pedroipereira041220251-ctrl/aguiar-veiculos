@@ -107,10 +107,12 @@ export default function VeiculoDetailPage() {
 
   async function registrarVenda(e: React.FormEvent) {
     e.preventDefault();
+    const precoNum = parseFloat(vendaForm.preco_venda_final.replace(/\./g, '').replace(',', '.'));
+    if (!precoNum || precoNum <= 0) { alert('Insira um valor de venda válido (ex: 52000 ou 52.000,00)'); return; }
     setSalvandoVenda(true);
     try {
       await api.veiculos.vender(id, {
-        preco_venda_final: Number(vendaForm.preco_venda_final),
+        preco_venda_final: precoNum,
         data_venda: vendaForm.data_venda || undefined,
         nome_comprador: vendaForm.nome_comprador || undefined,
         nome_vendedor: vendaForm.nome_vendedor || undefined,
@@ -403,14 +405,20 @@ export default function VeiculoDetailPage() {
             </div>
             {veiculo.documentacao ? (
               <div className="grid grid-cols-2 gap-2">
-                {veiculo.documentacao.ipva_vencimento && (
-                  <div className="col-span-2 flex items-center gap-2 px-1 py-1">
-                    <AlertCircle size={14} className={new Date(veiculo.documentacao.ipva_vencimento) < new Date() ? 'text-red-400' : 'text-yellow-400'} />
-                    <span className="text-sm text-text-primary">
-                      IPVA vence em {new Date(veiculo.documentacao.ipva_vencimento).toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' })}
-                    </span>
-                  </div>
-                )}
+                {veiculo.documentacao.ipva_vencimento && (() => {
+                  // Parse sem conversão de timezone: '2027-03-01' → '03/2027'
+                  const parts = veiculo.documentacao.ipva_vencimento.split('-');
+                  const mesAno = `${parts[1]}/${parts[0]}`;
+                  const vencido = new Date(veiculo.documentacao.ipva_vencimento + 'T12:00:00') < new Date();
+                  return (
+                    <div className="col-span-2 flex items-center gap-2 px-1 py-1">
+                      <AlertCircle size={14} className={vencido ? 'text-red-400' : 'text-yellow-400'} />
+                      <span className="text-sm text-text-primary">
+                        IPVA vence em {mesAno}
+                      </span>
+                    </div>
+                  );
+                })()}
                 {([
                   ['transferencia_ok', 'Transferência'],
                   ['laudo_vistoria_ok', 'Laudo vistoria'],
@@ -541,7 +549,7 @@ export default function VeiculoDetailPage() {
                 Preço final de venda (R$) <span className="text-primary">*</span>
               </label>
               <input
-                required type="number" min={1}
+                required
                 value={vendaForm.preco_venda_final}
                 onChange={e => setVendaForm(p => ({ ...p, preco_venda_final: e.target.value }))}
                 placeholder={String(veiculo.preco_venda)}

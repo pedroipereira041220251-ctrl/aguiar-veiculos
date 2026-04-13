@@ -25,6 +25,8 @@ CREATE TABLE IF NOT EXISTS veiculos (
                    CHECK (status IN ('disponivel','reservado','vendido','inativo')),
   preco_venda_final numeric(12,2),                  -- valor real recebido (base do lucro_real)
   data_venda       date,
+  nome_vendedor    text,                            -- vendedor responsável pela venda
+  nome_comprador   text,                            -- comprador (para histórico)
   obs              text,
   fipe_referencia  numeric(12,2),                   -- valor FIPE no momento do cadastro
   criado_via       text NOT NULL DEFAULT 'painel'

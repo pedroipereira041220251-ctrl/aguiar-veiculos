@@ -63,8 +63,11 @@ export async function handler({ contato, canal, texto, body, lead_id }) {
 // ─────────────────────────────────────────────────────────
 
 async function processarComIA({ contato, canal, mensagens, body, lead_id }) {
+  console.log('[agente] processarComIA iniciado:', contato, '| msgs:', mensagens?.length);
+
   // 1. Verificar horário de atendimento
   const dentroHorario = await verificarHorario();
+  console.log('[agente] dentro do horário:', dentroHorario, '| HORARIO_24H:', process.env.HORARIO_24H);
   if (!dentroHorario) {
     const { data: cfg } = await supabase.from('configuracoes').select('msg_fora_horario').eq('id', 1).single();
     const msg = cfg?.msg_fora_horario || 'Olá! Estamos fora do horário de atendimento. Em breve retornaremos!';
@@ -74,6 +77,7 @@ async function processarComIA({ contato, canal, mensagens, body, lead_id }) {
 
   // 2. Buscar ou criar lead
   const lead = await buscarOuCriarLead(contato, canal, lead_id);
+  console.log('[agente] lead:', lead?.id || 'null', '| humano:', lead?.atendimento_humano);
   if (!lead) return;
 
   // Checar novamente após busca (handoff pode ter ocorrido em paralelo)
@@ -93,7 +97,9 @@ async function processarComIA({ contato, canal, mensagens, body, lead_id }) {
   ];
 
   // 6. Chamar GPT-4o com tools
+  console.log('[agente] chamando GPT-4o... modelo:', process.env.OPENAI_MODEL || 'gpt-4o', '| key:', process.env.OPENAI_API_KEY ? 'ok' : 'AUSENTE');
   const resposta = await chamarGPT(mensagensGPT, lead, contato, canal);
+  console.log('[agente] resposta GPT:', resposta?.texto?.slice(0, 80) || 'null');
   if (!resposta) return;
 
   // 7. Enviar resposta ao cliente

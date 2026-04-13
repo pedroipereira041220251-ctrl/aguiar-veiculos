@@ -120,13 +120,21 @@ async function rotearDono(phone, texto, body) {
 async function rotearCliente(phone, texto, body, isStory) {
   // Modo de teste: se TEST_CLIENT_PHONE estiver definido, ignora qualquer outro número
   const testPhone = (process.env.TEST_CLIENT_PHONE || '').replace(/\D/g, '');
-  if (testPhone && phone.replace(/\D/g, '') !== testPhone) return;
+  if (testPhone && phone.replace(/\D/g, '') !== testPhone) {
+    console.log('[rotearCliente] ignorado por TEST_CLIENT_PHONE. recebido:', phone, '| permitido:', testPhone);
+    return;
+  }
+
+  console.log('[rotearCliente] processando:', phone, '| texto:', texto?.slice(0, 50));
+
   // Buscar lead pelo número
   const { data: lead } = await supabase
     .from('leads')
     .select('id, atendimento_humano, canal')
     .eq('contato', phone)
     .maybeSingle();
+
+  console.log('[rotearCliente] lead:', lead?.id || 'novo', '| atendimento_humano:', lead?.atendimento_humano);
 
   // atendimento_humano=true → salvar histórico, NÃO responder
   if (lead?.atendimento_humano === true) {
@@ -135,6 +143,7 @@ async function rotearCliente(phone, texto, body, isStory) {
   }
 
   // Encaminhar para agente de IA
+  console.log('[rotearCliente] enviando para agente...');
   await agenteHandler({
     contato:   phone,
     canal:     'whatsapp',

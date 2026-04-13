@@ -48,7 +48,13 @@ export async function handler({ contato, canal, texto, body, lead_id }) {
   entry.timer = setTimeout(async () => {
     debounceMap.delete(chave);
     await processarComIA({ contato, canal, mensagens: entry.mensagens, body: entry.body, lead_id })
-      .catch(err => console.error('[agente] Erro no processamento:', err));
+      .catch(async err => {
+        console.error('[agente] Erro no processamento:', err.message || err);
+        // Avisar o cliente que houve um problema em vez de sumir
+        if (canal === 'whatsapp') {
+          await sendText(contato, 'Olá! Tivemos um problema técnico momentâneo. Por favor, tente novamente em instantes.').catch(() => {});
+        }
+      });
   }, DEBOUNCE_MS);
 }
 

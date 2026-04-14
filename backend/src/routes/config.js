@@ -6,8 +6,8 @@ import supabase from '../db/supabase.js';
 const router = Router();
 
 const configSchema = z.object({
-  horario_inicio:       z.string().regex(/^\d{2}:\d{2}$/).optional(),
-  horario_fim:          z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  horario_inicio:       z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).optional(),
+  horario_fim:          z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).optional(),
   dias_semana:          z.array(z.number().int().min(0).max(6)).optional(),
   msg_fora_horario:     z.string().min(1).optional(),
   owner_phone_number:   z.string().optional(),

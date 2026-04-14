@@ -42,8 +42,8 @@ export default function ConfiguracoesPage() {
     try {
       const data = await api.config.buscar();
       setConfig(data);
-      setHorarioInicio(data.horario_inicio ?? '08:00');
-      setHorarioFim(data.horario_fim ?? '18:00');
+      setHorarioInicio((data.horario_inicio ?? '08:00').slice(0, 5));
+      setHorarioFim((data.horario_fim ?? '18:00').slice(0, 5));
       setDiasSemana(data.dias_semana ?? [1, 2, 3, 4, 5, 6]);
       setMsgFora(data.msg_fora_horario ?? '');
       setOwnerPhone(data.owner_phone_number ?? '');

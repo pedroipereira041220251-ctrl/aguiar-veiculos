@@ -308,7 +308,6 @@ function LeadCardContent({ lead, onAssumir, assumindo, onAbrir, onMover, onToggl
           >
             <ArrowRightLeft size={12} />
           </button>
-        )}
       </div>
 
       {/* Seletor de colunas */}

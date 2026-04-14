@@ -149,7 +149,7 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const parsed = criarVeiculoSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    if (!parsed.success) return res.status(400).json({ error: Object.entries(parsed.error.flatten().fieldErrors).map(([k,v]) => `${k}: ${v}`).join(", ") || "Dados inválidos" });
 
     const { ipva_vencimento, transferencia_ok, ...veiculoData } = parsed.data;
 
@@ -190,7 +190,7 @@ router.post('/', async (req, res) => {
 router.patch('/:id', async (req, res) => {
   try {
     const parsed = editarVeiculoSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    if (!parsed.success) return res.status(400).json({ error: Object.entries(parsed.error.flatten().fieldErrors).map(([k,v]) => `${k}: ${v}`).join(", ") || "Dados inválidos" });
     if (Object.keys(parsed.data).length === 0) return res.status(400).json({ error: 'Nenhum campo para atualizar' });
 
     const { data, error } = await supabase
@@ -236,7 +236,7 @@ router.delete('/:id', async (req, res) => {
 router.patch('/:id/vender', async (req, res) => {
   try {
     const parsed = venderSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    if (!parsed.success) return res.status(400).json({ error: Object.entries(parsed.error.flatten().fieldErrors).map(([k,v]) => `${k}: ${v}`).join(", ") || "Dados inválidos" });
 
     const { preco_venda_final, data_venda, nome_comprador, nome_vendedor, forma_pagamento } = parsed.data;
 
@@ -301,7 +301,7 @@ router.get('/:id/custos', async (req, res) => {
 router.post('/:id/custos', async (req, res) => {
   try {
     const parsed = custoSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    if (!parsed.success) return res.status(400).json({ error: Object.entries(parsed.error.flatten().fieldErrors).map(([k,v]) => `${k}: ${v}`).join(", ") || "Dados inválidos" });
 
     // Verificar se veículo existe
     const { data: veiculo, error: eV } = await supabase
@@ -431,7 +431,7 @@ router.delete('/fotos/:id', async (req, res) => {
 router.patch('/:id/fotos/ordem', async (req, res) => {
   try {
     const parsed = ordemFotosSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    if (!parsed.success) return res.status(400).json({ error: Object.entries(parsed.error.flatten().fieldErrors).map(([k,v]) => `${k}: ${v}`).join(", ") || "Dados inválidos" });
 
     // Atualizar cada foto em paralelo
     await Promise.all(
@@ -451,7 +451,7 @@ router.patch('/:id/fotos/ordem', async (req, res) => {
 router.patch('/:id/documentacao', async (req, res) => {
   try {
     const parsed = documentacaoSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    if (!parsed.success) return res.status(400).json({ error: Object.entries(parsed.error.flatten().fieldErrors).map(([k,v]) => `${k}: ${v}`).join(", ") || "Dados inválidos" });
     if (Object.keys(parsed.data).length === 0) return res.status(400).json({ error: 'Nenhum campo para atualizar' });
 
     // Upsert: se não existe, cria

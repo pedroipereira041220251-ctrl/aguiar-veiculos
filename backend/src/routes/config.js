@@ -37,7 +37,7 @@ router.get('/', async (_req, res) => {
 router.patch('/', async (req, res) => {
   try {
     const parsed = configSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    if (!parsed.success) return res.status(400).json({ error: Object.entries(parsed.error.flatten().fieldErrors).map(([k,v]) => `${k}: ${v}`).join(", ") || "Dados inválidos" });
     if (Object.keys(parsed.data).length === 0) return res.status(400).json({ error: 'Nenhum campo para atualizar' });
 
     const { data, error } = await supabase

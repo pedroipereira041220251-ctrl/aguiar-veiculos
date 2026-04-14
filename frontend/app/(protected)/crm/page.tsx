@@ -322,7 +322,10 @@ function LeadCard({ lead, isDraggingThis, onAssumir, assumindo, onAbrir }: {
       ref={setNodeRef}
       {...attributes}
       {...listeners}
-      onPointerDown={(e) => { pointerStart.current = { x: e.clientX, y: e.clientY }; }}
+      onPointerDown={(e) => {
+        pointerStart.current = { x: e.clientX, y: e.clientY };
+        listeners?.onPointerDown?.(e);
+      }}
       onClick={(e) => {
         // Cancela click se o pointer se moveu mais de 8px (foi drag)
         const s = pointerStart.current;

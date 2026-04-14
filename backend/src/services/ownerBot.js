@@ -487,8 +487,10 @@ async function handleCadastroFotos(data, norm, dados, canal, ownerId, body) {
 
       if (isImagem) {
         // Z-API pode enviar a imagem como URL ou base64 em campos diferentes
+        // Z-API envia imagem em body.image.imageUrl (campo real confirmado em produção)
         const imageUrl =
-          body?.image?.url ||
+          body?.image?.imageUrl ||          // campo real Z-API
+          body?.image?.url ||               // fallback legado
           body?.image?.imageMessage?.url ||
           body?.downloadUrl ||
           (typeof body?.image === 'string' && body.image.startsWith('http') ? body.image : null);
@@ -496,7 +498,7 @@ async function handleCadastroFotos(data, norm, dados, canal, ownerId, body) {
         const base64Str =
           typeof body?.image === 'string' && !body.image.startsWith('http') ? body.image : null;
 
-        console.log('[ownerBot/fotos/wa] imageUrl:', imageUrl?.slice(0, 80), '| hasBase64:', !!base64Str);
+        console.log('[ownerBot/fotos/wa] imageUrl:', imageUrl?.slice(0, 80), '| hasBase64:', !!base64Str, '| imageKeys:', Object.keys(body?.image || {}));
 
         try {
           let buffer, ext = 'jpg', contentType = 'image/jpeg';

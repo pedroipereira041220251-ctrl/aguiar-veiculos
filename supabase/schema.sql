@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS veiculos (
   data_venda       date,
   nome_vendedor    text,                            -- vendedor responsável pela venda
   nome_comprador   text,                            -- comprador (para histórico)
+  forma_pagamento  text,                            -- À vista, Financiamento, Consórcio
   obs              text,
   fipe_referencia  numeric(12,2),                   -- valor FIPE no momento do cadastro
   criado_via       text NOT NULL DEFAULT 'painel'
@@ -216,7 +217,18 @@ LEFT JOIN custos_veiculo c ON c.veiculo_id = v.id
 GROUP BY v.id;
 
 -- ============================================================
--- 11. RLS — Row Level Security
+-- 11. TABELA: vendedores
+-- Lista de vendedores cadastrados para seleção durante venda
+-- ============================================================
+CREATE TABLE IF NOT EXISTS vendedores (
+  id         uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  nome       text NOT NULL UNIQUE,
+  ativo      boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- ============================================================
+-- 12. RLS — Row Level Security
 -- Authenticated users podem ler e escrever
 -- SERVICE_KEY (backend) bypassa RLS automaticamente
 -- ============================================================
@@ -228,6 +240,7 @@ ALTER TABLE leads                 ENABLE ROW LEVEL SECURITY;
 ALTER TABLE conversas             ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bot_sessions          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE configuracoes         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE vendedores            ENABLE ROW LEVEL SECURITY;
 
 -- Políticas: authenticated users têm acesso total
 -- (backend usa service_role que bypassa RLS; frontend usa anon/auth)
@@ -256,8 +269,11 @@ CREATE POLICY "authenticated_all_bot_sessions"
 CREATE POLICY "authenticated_all_configuracoes"
   ON configuracoes FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
+CREATE POLICY "authenticated_all_vendedores"
+  ON vendedores FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
 -- ============================================================
--- 12. INDEXES — performance
+-- 13. INDEXES — performance
 -- ============================================================
 CREATE INDEX IF NOT EXISTS idx_veiculos_status     ON veiculos(status);
 CREATE INDEX IF NOT EXISTS idx_veiculos_placa       ON veiculos(placa);
@@ -271,14 +287,14 @@ CREATE INDEX IF NOT EXISTS idx_conversas_lead_id    ON conversas(lead_id);
 CREATE INDEX IF NOT EXISTS idx_bot_sessions_canal   ON bot_sessions(canal, owner_id);
 
 -- ============================================================
--- 13. SEED: configuracoes (singleton — sempre 1 linha)
+-- 14. SEED: configuracoes (singleton — sempre 1 linha)
 -- INSERT OR IGNORE para não duplicar em re-runs
 -- ============================================================
 INSERT INTO configuracoes (id) VALUES (1)
 ON CONFLICT (id) DO NOTHING;
 
 -- ============================================================
--- 14. STORAGE — bucket fotos-veiculos
+-- 15. STORAGE — bucket fotos-veiculos
 -- Rodar separado em: Supabase Dashboard → Storage → New bucket
 -- OU via SQL abaixo (requer extensão storage já ativa)
 -- ============================================================

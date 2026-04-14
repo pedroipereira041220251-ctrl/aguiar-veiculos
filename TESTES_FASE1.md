@@ -12,16 +12,48 @@
 ## ⚠️ MIGRAÇÕES OBRIGATÓRIAS — confirmar antes de testar
 
 ```sql
+-- 1. Adicionar colunas à tabela veiculos
 ALTER TABLE veiculos ADD COLUMN IF NOT EXISTS nome_vendedor text;
 ALTER TABLE veiculos ADD COLUMN IF NOT EXISTS nome_comprador text;
 ALTER TABLE veiculos ADD COLUMN IF NOT EXISTS forma_pagamento text;
 
+-- 2. Criar tabela vendedores
 CREATE TABLE IF NOT EXISTS vendedores (
   id         uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   nome       text NOT NULL UNIQUE,
   ativo      boolean DEFAULT true,
   created_at timestamptz DEFAULT now()
 );
+
+-- 3. ⚠️ CRÍTICO: recriar a view para incluir forma_pagamento
+--    (v.* é expandido na criação da view — precisa recriar após ALTER TABLE)
+CREATE OR REPLACE VIEW vw_veiculos_com_financeiro AS
+SELECT
+  v.*,
+  COALESCE(SUM(c.valor), 0)                                        AS total_custos,
+  v.preco_compra + COALESCE(SUM(c.valor), 0)                       AS investimento_total,
+  v.preco_venda - v.preco_compra - COALESCE(SUM(c.valor), 0)       AS lucro_estimado,
+  CASE
+    WHEN v.preco_venda > 0 THEN
+      ROUND(
+        ((v.preco_venda - v.preco_compra - COALESCE(SUM(c.valor), 0)) / v.preco_venda) * 100,
+        2
+      )
+    ELSE 0
+  END                                                               AS margem_pct,
+  CASE
+    WHEN v.preco_venda_final IS NOT NULL THEN
+      v.preco_venda_final - v.preco_compra - COALESCE(SUM(c.valor), 0)
+    ELSE NULL
+  END                                                               AS lucro_real
+FROM veiculos v
+LEFT JOIN custos_veiculo c ON c.veiculo_id = v.id
+GROUP BY v.id;
+
+-- 4. RLS para vendedores
+ALTER TABLE vendedores ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "authenticated_all_vendedores"
+  ON vendedores FOR ALL TO authenticated USING (true) WITH CHECK (true);
 ```
 
 ---
@@ -297,3 +329,5 @@ CREATE TABLE IF NOT EXISTS vendedores (
 ---
 
 *Atualizado em 14/04/2026 — deploy b71be38*
+
+> **Atenção:** se `forma_pagamento` não aparece nos detalhes do veículo vendido, a migração 3 (recriar view) não foi rodada ainda.

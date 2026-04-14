@@ -315,19 +315,31 @@ function LeadCard({ lead, isDraggingThis, onAssumir, assumindo, onAbrir }: {
   onAbrir: (id: string) => void;
 }) {
   const { attributes, listeners, setNodeRef } = useDraggable({ id: lead.id });
+  const pointerStart = useRef<{ x: number; y: number } | null>(null);
 
   return (
     <div
       ref={setNodeRef}
       {...attributes}
       {...listeners}
+      onPointerDown={(e) => { pointerStart.current = { x: e.clientX, y: e.clientY }; }}
+      onClick={(e) => {
+        // Cancela click se o pointer se moveu mais de 8px (foi drag)
+        const s = pointerStart.current;
+        if (s && Math.hypot(e.clientX - s.x, e.clientY - s.y) > 8) {
+          e.stopPropagation();
+          return;
+        }
+        // Não abre drawer ao clicar no botão Assumir (ele usa stopPropagation)
+        onAbrir(lead.id);
+      }}
       className={cn(isDraggingThis && 'invisible')}
     >
       <LeadCardContent
         lead={lead}
         onAssumir={onAssumir}
         assumindo={assumindo}
-        onAbrir={onAbrir}
+        onAbrir={() => {}} // click tratado no wrapper acima
       />
     </div>
   );

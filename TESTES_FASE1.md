@@ -59,7 +59,7 @@ GROUP BY v.id;
 
 ## PRÉ-REQUISITO
 
-- [x] Backend ativo no Railway (deploy `8e02428`)
+- [x] Backend ativo no Railway (deploy `2dfe564`)
 - [x] Frontend rodando em `localhost:3000`
 - [x] WhatsApp conectado ao Z-API
 - [x] Número do dono configurado em `OWNER_PHONE_NUMBER`
@@ -75,7 +75,8 @@ GROUP BY v.id;
 | # | Status | Ação | Resultado esperado |
 |---|--------|------|--------------------|
 | 1.1–1.9 | ✅ | Menus, submenus, variações de texto | Funcionam corretamente |
-| 1.10 | ⬜ | Ficar 31 min sem interagir | "Sessão expirada. Mande /menu para recomeçar." |
+| 1.10 | ✅ | Ficar 31 min sem interagir → digitar algo | "Sessão expirada. Mande /menu para recomeçar." |
+| 1.11 | ✅ | Ficar 31 min sem interagir → digitar `/menu` | Menu abre normalmente, sem mensagem de expiração |
 
 ---
 
@@ -103,69 +104,72 @@ GROUP BY v.id;
 
 ### 3C — Fotos via WhatsApp 🔁
 
-> Corrigido: usa `body.image.imageUrl` (campo real confirmado em log de produção).
+> Corrigido: cascata de fallbacks — tenta `imageUrl`, depois download on-demand via Z-API, depois `thumbnailUrl` (base64). Múltiplas fotos funcionam pois sessão mantém `aguardando_foto: true` entre envios.
 
 | # | Status | Ação | Resultado esperado |
 |---|--------|------|--------------------|
 | 3C.1 | ✅ | Digitar `1` (Adicionar fotos) | "Envie as fotos uma a uma." |
 | 3C.2 | 🔁 | Enviar foto como imagem no WhatsApp | "Foto 1 salva!" |
-| 3C.3 | ⬜ | Enviar mais de uma foto em sequência | Cada uma salva: "Foto 2 salva!", etc. |
-| 3C.4 | ⬜ | Digitar `1` (Concluir) | "Mande /menu para continuar." |
-| 3C.5 | ⬜ | Abrir `/estoque/[id]` | Fotos aparecem no painel |
+| 3C.3 | 🔁 | Enviar mais de uma foto em sequência | Cada uma salva: "Foto 2 salva!", etc. |
+| 3C.4 | 🔁 | Digitar `1` (Concluir) | "Mande /menu para continuar." |
+| 3C.5 | 🔁 | Abrir `/estoque/[id]` | Fotos aparecem no painel |
 
 ---
 
 ## BLOCO 4 — Lançar Custo 🔁
 
-> Corrigido: observação pede texto direto (sem etapa "Adicionar"); custo bloqueado em vendidos.
+> Corrigido: observação agora mostra `1️⃣ ⏭️ Pular` (sem botão "Adicionar"); custo bloqueado em vendidos.
 
 | # | Status | Ação | Resultado esperado |
 |---|--------|------|--------------------|
 | 4.1–4.5 | ✅ | Lançar custo no CROSSFOX | Custo salvo, investimento atualiza |
-| 4.6 | 🔁 | Lançar custo em carro **vendido** | "⚠️ já foi vendido. Não é possível lançar custos. Mande /menu para continuar." |
+| 4.6 | ✅ | Lançar custo em carro **vendido** | "⚠️ já foi vendido. Não é possível lançar custos." |
 | 4.7 | ✅ | Abrir aba Custos no painel | Custo listado |
 | 4.8 | 🔁 | Step da observação → digitar texto | Observação salva diretamente |
-| 4.9 | 🔁 | Step da observação → clicar Pular | Custo salvo sem observação |
+| 4.9 | 🔁 | Step da observação → digitar `1` ou clicar Pular | Custo salvo sem observação |
 
 ---
 
 ## BLOCO 5 — Registrar Venda 🔁
 
-> Corrigido: edição de vendido bloqueada; `forma_pagamento` salvo; comprador/pagamento exibidos no detalhe.
-> ⚠️ Requer migração 3 (recriar view) para `forma_pagamento` aparecer.
+> Corrigido: vendedor é obrigatório (sem opção Pular); lista de vendedores cadastrados aparece como opções numeradas.
+> ⚠️ Requer migração 3 (recriar view) para `forma_pagamento` aparecer no detalhe.
 
 | # | Status | Ação | Resultado esperado |
 |---|--------|------|--------------------|
 | 5.1 | 🔁 | `/menu` → `1` → `3` → placa disponível | Veículo encontrado, confirma? |
 | 5.2 | 🔁 | Digitar `1` (Confirmar) | "Por qual valor foi vendido?" |
 | 5.3 | 🔁 | Digitar valor | "Forma de pagamento: 1 À vista…" |
-| 5.4 | 🔁 | Digitar `1` (À vista) | Lista de vendedores cadastrados (se houver) ou "Nome do vendedor?" |
-| 5.5 | 🔁 | Selecionar vendedor ou digitar nome | "Nome do comprador?" |
-| 5.6 | 🔁 | Digitar `pular` | Resumo com valor, lucro real, pagamento, vendedor |
+| 5.4 | 🔁 | Digitar `1` (À vista) | Lista de vendedores cadastrados (obrigatório selecionar) |
+| 5.5 | 🔁 | Selecionar vendedor da lista | "Nome do comprador?" |
+| 5.6 | 🔁 | Digitar `1` (Pular comprador) | Resumo com valor, lucro real, pagamento, vendedor |
 | 5.7 | 🔁 | Abrir `/estoque` → filtro Vendidos | Veículo como "Vendido" com lucro real no card |
 | 5.8 | 🔁 | Abrir detalhe do veículo vendido | Exibe: Vendido por, **Pagamento**, Vendedor, Comprador |
-| 5.9 | 🔁 | Tentar **editar** carro vendido via bot | "⚠️ já foi vendido e não pode ser editado. Mande /menu para continuar." |
-| 5.10 | 🔁 | Tentar **lançar custo** no carro vendido | "⚠️ já foi vendido. Não é possível lançar custos. Mande /menu para continuar." |
+| 5.9 | ✅ | Tentar **editar** carro vendido via bot | "⚠️ já foi vendido e não pode ser editado." |
+| 5.10 | ✅ | Tentar **lançar custo** no carro vendido | "⚠️ já foi vendido. Não é possível lançar custos." |
 
 ---
 
-## BLOCO 6 — Editar Veículo ✅
+## BLOCO 6 — Editar Veículo 🔁
 
-| # | Status | Resultado esperado |
-|---|--------|--------------------|
-| 6.1–6.4 | ✅ | Editar preço, cor, placa inexistente |
+> Corrigido: bloqueio de edição de vendido agora deployado.
+
+| # | Status | Ação | Resultado esperado |
+|---|--------|------|--------------------|
+| 6.1–6.4 | ✅ | Editar preço, cor, placa inexistente | Funciona |
+| 6.5 | 🔁 | Tentar editar carro **vendido** via bot | "⚠️ já foi vendido e não pode ser editado." |
 
 ---
 
 ## BLOCO 7 — Consultas WhatsApp 🔁
 
-> Corrigido: leads exibem número de telefone.
+> Corrigido: contato sempre visível em linha separada (`📞 número`); filtro mudado para `ultima_interacao` (leads ativos hoje sempre aparecem).
 
 | # | Status | Ação | Resultado esperado |
 |---|--------|------|--------------------|
 | 7.1 | ✅ | `/menu` → `2` → `1` (Estoque) | Resumo compacto |
 | 7.2 | ✅ | `/menu` → `2` → `2` (Financeiro) | Resumo do mês |
-| 7.3 | 🔁 | `/menu` → `2` → `3` (Leads) | Lista com nome, **número de telefone**, canal, score |
+| 7.3 | 🔁 | `/menu` → `2` → `3` (Leads) | Lista com nome, **📞 número**, canal, score |
 | 7.4 | ✅ | `/menu` → `2` → `4` (Alertas) | IPVA, docs pendentes, parados |
 | 7.5 | ✅ | Digitar `alertas` | Mesmo resultado de 7.4 |
 
@@ -196,9 +200,11 @@ GROUP BY v.id;
 
 ### 9A.4 — Configurações 🔁
 
+> Corrigido: erro Zod serializado como string — não aparece mais `[object Object]`.
+
 | # | Status | Ação | Resultado esperado |
 |---|--------|------|--------------------|
-| 9A.4 | 🔁 | Alterar qualquer campo → Salvar | "Configurações salvas com sucesso." (mesmo sem preencher mensagem fora do horário) |
+| 9A.4 | 🔁 | Alterar qualquer campo → Salvar | "Configurações salvas com sucesso." sem popup de erro |
 
 ### 9B — Estoque 🔁
 
@@ -206,29 +212,31 @@ GROUP BY v.id;
 |---|--------|------|--------------------|
 | 9B.1–9B.6 | ✅ | Listar, filtrar, buscar, detalhe, editar, custos | Ok |
 | 9B.7 | ✅ | Documentação → IPVA | Data exibe **03/2027** |
-| 9B.8 | 🔁 | **Buscar** placa de veículo **vendido** (estando na aba Disponíveis) | Veículo vendido aparece nos resultados |
+| 9B.8 | 🔁 | Buscar placa de veículo **vendido** (na aba Disponíveis) | Veículo vendido aparece nos resultados |
 | 9B.9 | 🔁 | Documentação → Editar → campo IPVA | Input de mês/ano aparece; salvar altera; "Limpar" zera |
 | 9B.10 | ⬜ | `+ Novo veículo` → digitar placa → Consultar | FIPE preenche campo automaticamente |
 | 9B.11 | ⬜ | Salvar novo veículo pelo painel | Card aparece no estoque |
 
 ### 9C — CRM 🔁
 
+> Corrigido: drag restaurado — `onPointerDown` agora chama tanto o handler do dnd-kit quanto o nosso.
+
 | # | Status | Ação | Resultado esperado |
 |---|--------|------|--------------------|
 | 9C.1 | ✅ | Acessar `/crm` | Kanban com colunas |
 | 9C.2 | ✅ | Clicar em lead | Drawer com histórico |
 | 9C.3 | ✅ | Clicar "Assumir" | Status muda para atendimento humano |
-| 9C.4 | 🔁 | Arrastar lead entre colunas | Card move para a coluna destino; drawer não abre ao soltar |
+| 9C.4 | 🔁 | Arrastar lead entre colunas | Card move para coluna destino; drawer não abre ao soltar |
 
 ### 9D — Venda pelo painel 🔁
 
-> ⚠️ Requer migração 3 (recriar view) para `forma_pagamento` aparecer no detalhe.
+> Corrigido: vendedor carrega lista cadastrada como `<select>`; `forma_pagamento` requer migração 3 (recriar view).
 
 | # | Status | Ação | Resultado esperado |
 |---|--------|------|--------------------|
-| 9D.1 | 🔁 | Aba Vender → preencher valor + **selecionar pagamento** → Confirmar | Venda registrada |
+| 9D.1 | 🔁 | Aba Vender → preencher valor + **selecionar pagamento** + **selecionar vendedor da lista** → Confirmar | Venda registrada |
 | 9D.2 | 🔁 | Abrir detalhe do veículo vendido | Exibe: Vendido por, **Pagamento**, Vendedor, Comprador |
-| 9D.3 | 🔁 | Card do veículo vendido na lista | Mostra "Lucro real" e "Vendido por" (não "Lucro est.") |
+| 9D.3 | 🔁 | Card do veículo vendido na lista | Mostra "Lucro real" e "Vendido por" |
 
 ---
 
@@ -266,7 +274,7 @@ GROUP BY v.id;
 | # | Status | Ação | Resultado esperado |
 |---|--------|------|--------------------|
 | 13.1 | ✅ | Lançar custo | "Custos salvos." |
-| 13.2 | 🔁 | Registrar venda | Fluxo: preço → pagamento → vendedor (lista ou digita) → comprador → resumo |
+| 13.2 | 🔁 | Registrar venda | Fluxo: preço → pagamento → vendedor (lista obrigatória) → comprador → resumo |
 | 13.3 | 🔁 | Abrir detalhe do veículo vendido | Pagamento, Vendedor e Comprador aparecem |
 | 13.4 | ✅ | Editar veículo | "Atualizado com sucesso." |
 
@@ -290,16 +298,15 @@ GROUP BY v.id;
 
 ## BLOCO 16 — Vendedores 🔁
 
-> ⚠️ Rodar migrações 2 e 3 antes de testar.
-
 | # | Status | Ação | Resultado esperado |
 |---|--------|------|--------------------|
 | 16.1 | ✅ | `/vendedores` → aba Desempenho | Lista com qtd vendas, receita, comissão |
 | 16.2 | ✅ | Clicar em vendedor | Expande vendas individuais |
 | 16.3 | 🔁 | Aba Cadastro → digitar nome → Adicionar | Vendedor aparece na lista |
 | 16.4 | 🔁 | Clicar no lixo ao lado de um vendedor | Vendedor removido |
-| 16.5 | 🔁 | Registrar venda via bot (WA ou TG) com vendedor cadastrado | Lista de vendedores aparece como opções numeradas |
+| 16.5 | 🔁 | Registrar venda via bot (WA ou TG) | Lista de vendedores aparece como opções numeradas (obrigatório) |
 | 16.6 | 🔁 | Selecionar vendedor da lista e concluir venda | Vendedor correto salvo no veículo |
+| 16.7 | 🔁 | Registrar venda pelo painel com lista de vendedores | `<select>` com nomes cadastrados aparece |
 
 ---
 
@@ -307,30 +314,30 @@ GROUP BY v.id;
 
 | Bloco | Status |
 |-------|--------|
-| 1 — Menu WhatsApp | ✅ (retestar 1.10) |
+| 1 — Menu WhatsApp | ✅ |
 | 2 — API Placas | ✅ |
 | 3A/3B — Cadastro | ✅ |
 | 3C — Fotos WA | 🔁 retestar |
-| 4 — Custo WhatsApp | 🔁 retestar observação + bloqueio vendido |
+| 4 — Custo WhatsApp | 🔁 retestar observação |
 | 5 — Venda WhatsApp | 🔁 retestar fluxo completo |
-| 6 — Edição WhatsApp | ✅ |
+| 6 — Edição WhatsApp | 🔁 retestar bloqueio vendido |
 | 7 — Consultas WhatsApp | 🔁 retestar telefone no lead |
 | 8 — Agente IA | 🔁 retestar nome + fora do horário |
 | 9A — Dashboard | ✅ |
 | 9A.4 — Configurações | 🔁 retestar salvar |
 | 9B — Estoque | 🔁 retestar busca + IPVA edit + novo veículo |
 | 9C — CRM | 🔁 retestar drag & drop |
-| 9D — Venda painel | 🔁 retestar pagamento + card |
+| 9D — Venda painel | 🔁 retestar pagamento + vendedor + card |
 | 10 — Casos extremos | ✅ |
 | 11 — Telegram: menu | ✅ |
 | 12 — Telegram: cadastro | 🔁 retestar docs |
-| 13 — Telegram: venda | 🔁 retestar pagamento |
+| 13 — Telegram: venda | 🔁 retestar pagamento + vendedor |
 | 14 — Telegram: consultas | ✅ |
 | 15 — Paridade WA × TG | ✅ |
-| 16 — Vendedores | 🔁 retestar CRUD + bot |
+| 16 — Vendedores | 🔁 retestar CRUD + bot + painel |
 
 **Todos os blocos ✅ → Fase 1 concluída → pode avançar para a Fase 2.**
 
 ---
 
-*Atualizado em 14/04/2026 — deploy `8e02428`*
+*Atualizado em 14/04/2026 — deploy `2dfe564`*

@@ -1,5 +1,5 @@
 /**
- * resumoSemanal.js — Cron job: todo sábado às 8h (America/Sao_Paulo)
+ * resumoSemanal.js — Cron job: todo sábado às 18h (America/Sao_Paulo)
  * Conteúdo (seção 5.8):
  *   • Vendas da semana: qtd, receita total, lucro_real total
  *   • Leads recebidos: qtd por canal, qtd transferidos ao dono
@@ -13,10 +13,10 @@ import supabase from '../db/supabase.js';
 import { sendText } from './waClient.js';
 import { sendMessage as tgSend } from './telegramClient.js';
 
-// Sábado às 8h no fuso America/Sao_Paulo
-// cron: segundo minuto hora dia-mes mes dia-semana
+// Sábado às 18h no fuso America/Sao_Paulo (ao fechar a loja)
+// cron: minuto hora dia-mes mes dia-semana
 // dia-semana 6 = sábado
-const CRON_EXPR = '0 8 * * 6';
+const CRON_EXPR = '0 18 * * 6';
 
 export function iniciarCronResumoSemanal() {
   cron.schedule(CRON_EXPR, async () => {
@@ -28,7 +28,7 @@ export function iniciarCronResumoSemanal() {
     }
   }, { timezone: 'America/Sao_Paulo' });
 
-  console.log('[resumoSemanal] Cron agendado — sábados às 8h (America/Sao_Paulo)');
+  console.log('[resumoSemanal] Cron agendado — sábados às 18h (America/Sao_Paulo)');
 }
 
 export async function enviarResumoSemanal() {

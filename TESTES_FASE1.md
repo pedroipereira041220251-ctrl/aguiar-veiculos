@@ -26,8 +26,9 @@ CREATE TABLE IF NOT EXISTS vendedores (
 );
 
 -- 3. ⚠️ CRÍTICO: recriar a view para incluir forma_pagamento
---    (v.* é expandido na criação da view — precisa recriar após ALTER TABLE)
-CREATE OR REPLACE VIEW vw_veiculos_com_financeiro AS
+--    CREATE OR REPLACE falha se colunas mudaram de posição — precisa DROP + CREATE
+DROP VIEW IF EXISTS vw_veiculos_com_financeiro;
+CREATE VIEW vw_veiculos_com_financeiro AS
 SELECT
   v.*,
   COALESCE(SUM(c.valor), 0)                                        AS total_custos,

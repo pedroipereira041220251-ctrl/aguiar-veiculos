@@ -193,7 +193,8 @@ CREATE TRIGGER trg_configuracoes_updated_at
 -- NUNCA armazenar lucro como campo fixo — sempre calcular via view
 -- lucro_real usa preco_venda_final (valor real), NUNCA preco_venda (preço pedido)
 -- ============================================================
-CREATE OR REPLACE VIEW vw_veiculos_com_financeiro AS
+DROP VIEW IF EXISTS vw_veiculos_com_financeiro;
+CREATE VIEW vw_veiculos_com_financeiro AS
 SELECT
   v.*,
   COALESCE(SUM(c.valor), 0)                                        AS total_custos,

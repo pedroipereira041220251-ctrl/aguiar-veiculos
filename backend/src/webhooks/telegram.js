@@ -1,6 +1,8 @@
 import { Router } from 'express';
-import { answerCallback } from '../services/telegramClient.js';
+import { answerCallback, getBot } from '../services/telegramClient.js';
 import { handler as ownerBotHandler, activateMenu } from '../services/ownerBot.js';
+import { handler as agenteHandler } from '../services/agente.js';
+import { transcreverAudio } from '../services/whisper.js';
 import supabase from '../db/supabase.js';
 
 const router = Router();
@@ -65,10 +67,23 @@ async function processarCallback(callback) {
 }
 
 // ── processarMensagem ──────────────────────────────────────
-// Mensagens de texto enviadas pelo dono
+// Mensagens de texto (e voz) enviadas pelo dono
 async function processarMensagem(msg) {
   const chatId = String(msg.chat?.id || msg.from?.id);
-  const texto  = msg.text || msg.caption || '';
+
+  // Transcrever voz do dono via Whisper
+  let texto = msg.text || msg.caption || '';
+  const voiceFileId = msg.voice?.file_id || msg.audio?.file_id;
+  if (voiceFileId && !texto) {
+    const audioUrl = await resolverUrlTelegram(voiceFileId);
+    if (audioUrl) {
+      const transcricao = await transcreverAudio(audioUrl);
+      if (transcricao) {
+        texto = transcricao;
+        console.log('[webhook/tg] Voz transcrita:', texto.slice(0, 80));
+      }
+    }
+  }
 
   // Validar que é o dono
   if (!isDono(chatId)) return;
@@ -166,6 +181,21 @@ async function verificarSessao(chatId) {
   }
 
   return true;
+}
+
+// ── resolverUrlTelegram ────────────────────────────────────
+// Converte file_id em URL de download direto via Bot API
+async function resolverUrlTelegram(fileId) {
+  try {
+    const b = getBot();
+    if (!b) return null;
+    const file = await b.getFile(fileId);
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    return `https://api.telegram.org/file/bot${token}/${file.file_path}`;
+  } catch (err) {
+    console.error('[tg/resolverUrl]', err.message);
+    return null;
+  }
 }
 
 // Usado pelo polling em dev (telegramClient.js)

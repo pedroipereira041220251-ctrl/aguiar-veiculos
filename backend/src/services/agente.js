@@ -19,7 +19,9 @@
 import OpenAI from 'openai';
 import supabase from '../db/supabase.js';
 import { sendText } from './waClient.js';
-import { handoffAutomatico, notificarScore4, MOTIVOS } from './handoff.js';
+import { handoffAutomatico, notificarScore4, notificarFotoEntrada, MOTIVOS } from './handoff.js';
+import { analisarImagem } from './vision.js';
+import { sendInstagramMessage } from './metaClient.js';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -32,7 +34,7 @@ const DEBOUNCE_MS = 3000;
 // ENTRY POINT
 // ─────────────────────────────────────────────────────────
 
-export async function handler({ contato, canal, texto, body, lead_id }) {
+export async function handler({ contato, canal, texto, imageUrl = null, body, lead_id }) {
   // Acumular mensagem no debounce
   const chave = `${canal}:${contato}`;
 
@@ -40,14 +42,15 @@ export async function handler({ contato, canal, texto, body, lead_id }) {
     const entry = debounceMap.get(chave);
     clearTimeout(entry.timer);
     if (texto) entry.mensagens.push(texto);
+    if (imageUrl) entry.imageUrl = imageUrl;
   } else {
-    debounceMap.set(chave, { mensagens: texto ? [texto] : [], body });
+    debounceMap.set(chave, { mensagens: texto ? [texto] : [], body, imageUrl: imageUrl || null });
   }
 
   const entry = debounceMap.get(chave);
   entry.timer = setTimeout(async () => {
     debounceMap.delete(chave);
-    await processarComIA({ contato, canal, mensagens: entry.mensagens, body: entry.body, lead_id })
+    await processarComIA({ contato, canal, mensagens: entry.mensagens, body: entry.body, imageUrl: entry.imageUrl, lead_id })
       .catch(async err => {
         console.error('[agente] Erro no processamento:', err.message || err);
         // Avisar o cliente que houve um problema em vez de sumir
@@ -62,8 +65,8 @@ export async function handler({ contato, canal, texto, body, lead_id }) {
 // PROCESSAMENTO PRINCIPAL
 // ─────────────────────────────────────────────────────────
 
-async function processarComIA({ contato, canal, mensagens, body, lead_id }) {
-  console.log('[agente] processarComIA iniciado:', contato, '| msgs:', mensagens?.length);
+async function processarComIA({ contato, canal, mensagens, body, lead_id, imageUrl = null }) {
+  console.log('[agente] processarComIA iniciado:', contato, '| msgs:', mensagens?.length, '| foto:', !!imageUrl);
 
   // 1. Verificar horário de atendimento
   const dentroHorario = await verificarHorario();
@@ -91,6 +94,50 @@ async function processarComIA({ contato, canal, mensagens, body, lead_id }) {
 
   // Checar novamente após busca (handoff pode ter ocorrido em paralelo)
   if (lead.atendimento_humano) return;
+
+  // ── Tratamento de foto (Fase 2) ────────────────────────────
+  if (imageUrl) {
+    const { isVeiculo, dados, descricao } = await analisarImagem(imageUrl);
+
+    if (isVeiculo) {
+      // Salvar URL da foto no lead
+      await supabase.from('leads').update({ foto_entrada_url: imageUrl }).eq('id', lead.id).catch(() => {});
+
+      // Notificar dono (WA + Telegram)
+      await notificarFotoEntrada({
+        fotoUrl:        imageUrl,
+        modelo:         dados.modelo || 'não identificado',
+        ano:            dados.ano_estimado || null,
+        km:             null,
+        condicao:       dados.condicao || null,
+        contatoCliente: contato,
+      }).catch(err => console.error('[agente/foto] notificar:', err.message));
+
+      // Resposta neutra ao cliente — sem opinar sobre o veículo
+      const msgCliente = 'Foto recebida! Vou encaminhar para nossa equipe avaliar. Em breve entraremos em contato.';
+      await enviarParaCliente(contato, canal, msgCliente);
+
+      // Handoff automático
+      await executarHandoff(
+        lead.id,
+        MOTIVOS.FOTO_ENTRADA,
+        `Cliente enviou foto de veículo para entrada. ${descricao}`,
+        contato,
+        canal,
+      );
+
+      // Salvar no histórico
+      await salvarMensagens(lead.id, canal, [
+        { role: 'user',      content: `[Foto de veículo para entrada: ${descricao}]`, tipo: 'image' },
+        { role: 'assistant', content: msgCliente, tipo: 'text' },
+      ]);
+      return;
+    }
+
+    // Não é veículo → adiciona descrição ao contexto e deixa GPT responder normalmente
+    const descMsg = descricao ? `[Cliente enviou uma foto: ${descricao}]` : '[Cliente enviou uma foto]';
+    mensagens = [...(mensagens || []), descMsg];
+  }
 
   // 3. Carregar histórico
   const historico = await carregarHistorico(lead.id, canal);
@@ -433,12 +480,24 @@ async function executarTool(nome, args, lead, contato, canal) {
         return { dentro_horario: dentro };
       }
 
-      // ── Fase 2 stubs ──────────────────────────────────
-      case 'registrar_foto_entrada':
-        return { ok: false, mensagem: 'Funcionalidade disponível na Fase 2' };
+      case 'registrar_foto_entrada': {
+        if (lead?.id && args.foto_url) {
+          await supabase.from('leads').update({ foto_entrada_url: args.foto_url }).eq('id', lead.id);
+        }
+        return { ok: true };
+      }
 
-      case 'notificar_dono_entrada':
-        return { ok: false, mensagem: 'Funcionalidade disponível na Fase 2' };
+      case 'notificar_dono_entrada': {
+        await notificarFotoEntrada({
+          fotoUrl:        args.foto_url,
+          modelo:         args.modelo || null,
+          ano:            args.ano    || null,
+          km:             args.km     || null,
+          condicao:       args.condicao || null,
+          contatoCliente: args.contato_cliente || contato,
+        }).catch(err => console.error('[agente/tool:notificar_dono_entrada]', err.message));
+        return { ok: true };
+      }
 
       default:
         return { erro: `Tool desconhecida: ${nome}` };
@@ -596,8 +655,7 @@ async function enviarParaCliente(contato, canal, texto) {
   }
 
   if (canal === 'instagram') {
-    // Fase 2 — Meta Graph API
-    console.log('[agente] Instagram DM: Fase 2 —', contato, texto.slice(0, 50));
+    await sendInstagramMessage(contato, texto);
     return;
   }
 }

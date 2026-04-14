@@ -13,6 +13,7 @@ import configRouter from './routes/config.js';
 import vendedoresRouter from './routes/vendedores.js';
 import whatsappWebhook from './webhooks/whatsapp.js';
 import telegramWebhook from './webhooks/telegram.js';
+import instagramWebhook from './webhooks/instagram.js';
 import { iniciarCronResumoSemanal } from './services/resumoSemanal.js';
 import { initPolling } from './services/telegramClient.js';
 
@@ -50,8 +51,9 @@ app.use('/api/config',   configRouter);
 app.use('/api/vendedores', vendedoresRouter);
 
 // ── Webhooks ───────────────────────────────────────────────
-app.use('/webhooks/whatsapp', whatsappWebhook);
-app.use('/webhooks/telegram', telegramWebhook);
+app.use('/webhooks/whatsapp',  whatsappWebhook);
+app.use('/webhooks/telegram',  telegramWebhook);
+app.use('/webhooks/instagram', instagramWebhook);
 
 // ── Health check ───────────────────────────────────────────
 app.get('/health', (_req, res) => res.json({ ok: true }));

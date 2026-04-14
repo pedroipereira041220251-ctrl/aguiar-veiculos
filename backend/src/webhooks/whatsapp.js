@@ -4,6 +4,7 @@ import supabase from '../db/supabase.js';
 import { handler as ownerBotHandler, activateMenu } from '../services/ownerBot.js';
 import { handler as agenteHandler } from '../services/agente.js';
 import { sendText, sendListMessage, sendButtonMessage } from '../services/waClient.js';
+import { transcreverAudio } from '../services/whisper.js';
 
 const router = Router();
 
@@ -59,8 +60,20 @@ async function processarMensagem(body) {
   const tipo    = body.type || 'chat';
   const isStory = tipo === 'story_reply' || body.isStory === true;
 
-  // Extrair texto da mensagem
-  const texto = extrairTexto(body);
+  // Extrair texto e mídia da mensagem
+  const textoRaw = extrairTexto(body);
+  const audioUrl = extrairAudioUrl(body);
+  const imageUrl = extrairImagemUrl(body);
+
+  // Transcrever áudio via Whisper se não houver texto
+  let texto = textoRaw;
+  if (audioUrl && !textoRaw) {
+    const transcricao = await transcreverAudio(audioUrl);
+    if (transcricao) {
+      texto = transcricao;
+      console.log('[webhook] Áudio transcrito:', texto.slice(0, 80));
+    }
+  }
 
   const ownerPhone = process.env.OWNER_PHONE_NUMBER;
   const remetente  = phone.replace(/\D/g, '');
@@ -70,7 +83,7 @@ async function processarMensagem(body) {
   if (isOwner) {
     await rotearDono(remetente, texto, body);
   } else {
-    await rotearCliente(remetente, texto, body, isStory);
+    await rotearCliente(remetente, texto, body, isStory, imageUrl);
   }
 }
 
@@ -125,7 +138,7 @@ async function rotearDono(phone, texto, body) {
 }
 
 // ── rotearCliente ──────────────────────────────────────────
-async function rotearCliente(phone, texto, body, isStory) {
+async function rotearCliente(phone, texto, body, isStory, imageUrl = null) {
   // Modo de teste: se TEST_CLIENT_PHONE estiver definido, ignora qualquer outro número
   const testPhone = (process.env.TEST_CLIENT_PHONE || '').replace(/\D/g, '');
   if (testPhone && phone.replace(/\D/g, '') !== testPhone) {
@@ -156,6 +169,7 @@ async function rotearCliente(phone, texto, body, isStory) {
     contato:   phone,
     canal:     'whatsapp',
     texto,
+    imageUrl,
     body,
     isStory,
     lead_id:   lead?.id || null,
@@ -197,6 +211,25 @@ function extrairTexto(body) {
     body.selectedButtonId ||                 // id do botão selecionado
     ''
   );
+}
+
+function extrairAudioUrl(body) {
+  // Z-API: áudios PTT e AudioMessage
+  const tipo = (body.type || '').toLowerCase();
+  if (!tipo.includes('audio') && !tipo.includes('ptt')) return null;
+  return body.audio?.audioUrl || body.audio?.url || null;
+}
+
+function extrairImagemUrl(body) {
+  // URL direta (pode ser null com downloadError)
+  const imageUrl = body.image?.imageUrl;
+  if (imageUrl && !body.image?.downloadError) return imageUrl;
+
+  // Fallback: thumbnailUrl como data URI base64
+  const thumb = body.image?.thumbnailUrl || '';
+  if (thumb.startsWith('data:image')) return thumb;
+
+  return null;
 }
 
 async function resetarSessao(ownerId, canal) {

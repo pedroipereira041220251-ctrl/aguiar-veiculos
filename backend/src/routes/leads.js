@@ -138,7 +138,7 @@ router.patch('/:id', async (req, res) => {
 
     const { data, error } = await supabase
       .from('leads')
-      .update({ ...parsed.data, ultima_interacao: new Date().toISOString() })
+      .update(parsed.data)
       .eq('id', req.params.id)
       .select()
       .single();

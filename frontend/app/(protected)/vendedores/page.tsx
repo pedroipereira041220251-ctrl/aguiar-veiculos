@@ -2,9 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { api, type VendedorResumo, type VendaVendedor, type Vendedor } from '@/lib/api';
-import { fmt } from '@/lib/utils';
+import { fmt, cn } from '@/lib/utils';
 import { UserCheck, ChevronDown, ChevronUp, RefreshCw, Plus, Trash2, Users } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 export default function VendedoresPage() {
   const [vendedores, setVendedores] = useState<VendedorResumo[]>([]);

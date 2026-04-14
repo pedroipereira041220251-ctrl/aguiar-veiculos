@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { createClient } from '@/lib/supabase-browser';
 
 export default function LoginPage() {
@@ -30,9 +31,7 @@ export default function LoginPage() {
     <main className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm animate-fade-in">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-2xl mb-4 shadow-lg shadow-primary/30">
-            <span className="text-white text-3xl font-bold">A</span>
-          </div>
+          <Image src="/logo.png" alt="Aguiar Veículos" width={80} height={80} className="mx-auto mb-4 rounded-2xl shadow-lg" priority />
           <h1 className="text-2xl font-bold text-text-primary">Aguiar Veículos</h1>
           <p className="text-sm text-text-muted mt-1">Painel de gestão</p>
         </div>

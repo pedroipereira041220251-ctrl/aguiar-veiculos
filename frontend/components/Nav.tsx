@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, Car, Users, Bell, Settings, LogOut, ChevronLeft, ChevronRight, UserCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -51,9 +52,7 @@ export default function Nav() {
             'flex items-center gap-2.5 overflow-hidden',
             collapsed && 'justify-center',
           )}>
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0 shadow-lg shadow-primary/20">
-              <span className="text-white text-sm font-bold">A</span>
-            </div>
+            <Image src="/logo.png" alt="Aguiar Veículos" width={32} height={32} className="rounded-lg flex-shrink-0" />
             {!collapsed && (
               <div>
                 <p className="font-semibold text-text-primary text-sm leading-tight">Aguiar Veículos</p>

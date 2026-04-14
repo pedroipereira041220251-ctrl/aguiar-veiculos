@@ -5,6 +5,7 @@ export const metadata: Metadata = {
   title: 'Aguiar Veículos',
   description: 'Sistema de gestão de veículos usados',
   manifest: '/manifest.json',
+  icons: { icon: '/logo.png' },
 };
 
 export const viewport: Viewport = {

@@ -2,15 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { api, type FinanceiroEstoque, type FinanceiroResumo, type Lead, type Alerta } from '@/lib/api';
-import { fmt, fmtKm, FUNIL_LABEL } from '@/lib/utils';
+import { api, type FinanceiroEstoque, type FinanceiroResumo, type Lead, type Alerta, type Veiculo } from '@/lib/api';
+import { fmt, fmtKm, FUNIL_LABEL, cn } from '@/lib/utils';
 import {
   Car, TrendingUp, DollarSign, Users, Bell,
   Plus, ArrowRight, AlertTriangle, Phone, Instagram,
   RefreshCw,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import type { Veiculo } from '@/lib/api';
 
 function Skeleton({ className = '' }: { className?: string }) {
   return <div className={cn('animate-pulse bg-white/5 rounded-lg', className)} />;

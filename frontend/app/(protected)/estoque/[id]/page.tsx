@@ -36,7 +36,7 @@ export default function VeiculoDetailPage() {
   const [vendaForm, setVendaForm]           = useState(() => {
     const hoje = new Date();
     const data = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}-${String(hoje.getDate()).padStart(2,'0')}`;
-    return { preco_venda_final: '', data_venda: data, nome_comprador: '', nome_vendedor: '' };
+    return { preco_venda_final: '', data_venda: data, nome_comprador: '', nome_vendedor: '', forma_pagamento: '' };
   });
   const [salvandoVenda, setSalvandoVenda]   = useState(false);
   const [reservando, setReservando]         = useState(false);
@@ -113,9 +113,10 @@ export default function VeiculoDetailPage() {
     try {
       await api.veiculos.vender(id, {
         preco_venda_final: precoNum,
-        data_venda: vendaForm.data_venda || undefined,
-        nome_comprador: vendaForm.nome_comprador || undefined,
-        nome_vendedor: vendaForm.nome_vendedor || undefined,
+        data_venda:        vendaForm.data_venda        || undefined,
+        nome_comprador:    vendaForm.nome_comprador    || undefined,
+        nome_vendedor:     vendaForm.nome_vendedor     || undefined,
+        forma_pagamento:   vendaForm.forma_pagamento   || undefined,
       });
       router.push('/estoque');
     } catch (err: unknown) {
@@ -373,6 +374,12 @@ export default function VeiculoDetailPage() {
                       </p>
                     </div>
                   )}
+                  {veiculo.forma_pagamento && (
+                    <div>
+                      <p className="text-xs text-text-muted">Pagamento</p>
+                      <p className="text-sm font-medium text-text-primary">{veiculo.forma_pagamento}</p>
+                    </div>
+                  )}
                   {veiculo.nome_vendedor && (
                     <div>
                       <p className="text-xs text-text-muted">Vendedor</p>
@@ -405,20 +412,43 @@ export default function VeiculoDetailPage() {
             </div>
             {veiculo.documentacao ? (
               <div className="grid grid-cols-2 gap-2">
-                {veiculo.documentacao.ipva_vencimento && (() => {
-                  // Parse sem conversão de timezone: '2027-03-01' → '03/2027'
-                  const parts = veiculo.documentacao.ipva_vencimento.split('-');
-                  const mesAno = `${parts[1]}/${parts[0]}`;
-                  const vencido = new Date(veiculo.documentacao.ipva_vencimento + 'T12:00:00') < new Date();
-                  return (
-                    <div className="col-span-2 flex items-center gap-2 px-1 py-1">
-                      <AlertCircle size={14} className={vencido ? 'text-red-400' : 'text-yellow-400'} />
-                      <span className="text-sm text-text-primary">
-                        IPVA vence em {mesAno}
-                      </span>
+                {/* IPVA — mostra data e permite editar/limpar no modo edição */}
+                <div className="col-span-2">
+                  {editandoDoc ? (
+                    <div className="flex items-center gap-2 px-1 py-1">
+                      <AlertCircle size={14} className="text-yellow-400 flex-shrink-0" />
+                      <span className="text-xs text-text-muted">IPVA vence em</span>
+                      <input
+                        type="month"
+                        defaultValue={veiculo.documentacao.ipva_vencimento ? veiculo.documentacao.ipva_vencimento.slice(0, 7) : ''}
+                        onChange={e => {
+                          const val = e.target.value; // YYYY-MM
+                          const patch = val ? { ipva_vencimento: `${val}-01` } : { ipva_vencimento: null };
+                          salvarDocumentacao(patch);
+                        }}
+                        className="px-2 py-1 bg-white/5 border border-border rounded-lg text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+                      {veiculo.documentacao.ipva_vencimento && (
+                        <button
+                          onClick={() => salvarDocumentacao({ ipva_vencimento: null })}
+                          className="text-xs text-red-400 hover:underline ml-1"
+                        >
+                          Limpar
+                        </button>
+                      )}
                     </div>
-                  );
-                })()}
+                  ) : veiculo.documentacao.ipva_vencimento ? (() => {
+                    const parts = veiculo.documentacao.ipva_vencimento.split('-');
+                    const mesAno = `${parts[1]}/${parts[0]}`;
+                    const vencido = new Date(veiculo.documentacao.ipva_vencimento + 'T12:00:00') < new Date();
+                    return (
+                      <div className="flex items-center gap-2 px-1 py-1">
+                        <AlertCircle size={14} className={vencido ? 'text-red-400' : 'text-yellow-400'} />
+                        <span className="text-sm text-text-primary">IPVA vence em {mesAno}</span>
+                      </div>
+                    );
+                  })() : null}
+                </div>
                 {([
                   ['transferencia_ok', 'Transferência'],
                   ['laudo_vistoria_ok', 'Laudo vistoria'],
@@ -575,7 +605,20 @@ export default function VeiculoDetailPage() {
                   className={INPUT}
                 />
               </div>
-              <div className="col-span-2">
+              <div>
+                <label className="block text-xs font-medium text-text-muted mb-1">Forma de pagamento</label>
+                <select
+                  value={vendaForm.forma_pagamento}
+                  onChange={e => setVendaForm(p => ({ ...p, forma_pagamento: e.target.value }))}
+                  className={INPUT}
+                >
+                  <option value="">Selecionar (opcional)</option>
+                  <option value="À vista">À vista</option>
+                  <option value="Financiamento">Financiamento</option>
+                  <option value="Consórcio">Consórcio</option>
+                </select>
+              </div>
+              <div>
                 <label className="block text-xs font-medium text-text-muted mb-1">Vendedor responsável</label>
                 <input
                   value={vendaForm.nome_vendedor}

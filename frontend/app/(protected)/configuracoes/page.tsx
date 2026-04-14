@@ -81,7 +81,7 @@ export default function ConfiguracoesPage() {
         horario_inicio:       horarioInicio,
         horario_fim:          horarioFim,
         dias_semana:          diasSemana,
-        msg_fora_horario:     msgFora,
+        msg_fora_horario:     msgFora  || undefined,
         owner_phone_number:   ownerPhone || undefined,
         resumo_semanal_ativo: resumoAtivo,
         alerta_ipva_dias:     ipvaDias,

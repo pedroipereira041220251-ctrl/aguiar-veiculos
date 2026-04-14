@@ -68,16 +68,25 @@ async function processarComIA({ contato, canal, mensagens, body, lead_id }) {
   // 1. Verificar horário de atendimento
   const dentroHorario = await verificarHorario();
   console.log('[agente] dentro do horário:', dentroHorario, '| HORARIO_24H:', process.env.HORARIO_24H);
+
+  // 2. Buscar ou criar lead (sempre, mesmo fora do horário — para registrar no CRM)
+  const lead = await buscarOuCriarLead(contato, canal, lead_id);
+
   if (!dentroHorario) {
     const { data: cfg } = await supabase.from('configuracoes').select('msg_fora_horario').eq('id', 1).single();
     const msg = cfg?.msg_fora_horario || 'Olá! Estamos fora do horário de atendimento. Em breve retornaremos!';
     await enviarParaCliente(contato, canal, msg);
+    // Salvar mensagem no histórico mesmo fora do horário
+    if (lead) {
+      const textoConsolidado = mensagens.filter(Boolean).join('\n');
+      if (textoConsolidado) {
+        await salvarMensagens(lead.id, canal, [{ role: 'user', content: textoConsolidado, tipo: 'text' }]);
+      }
+    }
     return;
   }
-
-  // 2. Buscar ou criar lead
-  const lead = await buscarOuCriarLead(contato, canal, lead_id);
   console.log('[agente] lead:', lead?.id || 'null', '| humano:', lead?.atendimento_humano);
+  // (lead já foi criado/buscado antes da checagem de horário)
   if (!lead) return;
 
   // Checar novamente após busca (handoff pode ter ocorrido em paralelo)
@@ -128,6 +137,7 @@ const SYSTEM_PROMPT = `Você é o assistente virtual da Aguiar Veículos, uma lo
 Seu objetivo é qualificar leads para o dono da loja. Seja cordial, objetivo e direto. Evite emojis em excesso.
 
 Colete, ao longo da conversa:
+0. Nome do cliente — pergunte o nome logo no início se ainda não souber.
 1. Veículo de interesse (marca, modelo, ano ou características desejadas)
 2. Prazo de compra (imediato, 30 dias, pesquisando, etc.)
 3. Forma de pagamento (financiamento ou à vista)
@@ -139,7 +149,7 @@ Regras importantes:
 - NUNCA invente preços, disponibilidade ou condições. Use sempre a tool consultar_estoque.
 - Não mencione que é um bot, a menos que o cliente pergunte diretamente.
 - Se o cliente pedir para falar com um humano, use a tool handoff com motivo "pedido_cliente".
-- Use salvar_lead sempre que coletar novas informações relevantes do cliente.
+- Use salvar_lead sempre que coletar novas informações relevantes do cliente, incluindo o nome.
 - Quando o score atingir 4 (veículo + prazo + pagamento), use notificar_score4.
 - Quando o score atingir 5 (score 4 + carta de crédito aprovada), use handoff com motivo "score5".
 
@@ -457,7 +467,7 @@ async function executarHandoff(leadId, motivo, resumo, contato, canal) {
 
 async function verificarHorario() {
   // Modo 24h temporário: definir HORARIO_24H=true no Railway para bypassar
-  if (process.env.HORARIO_24H === 'true') return true;
+  if (process.env.HORARIO_24H?.toLowerCase() === 'true') return true;
 
   const { data: cfg } = await supabase
     .from('configuracoes')

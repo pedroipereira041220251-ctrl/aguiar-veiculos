@@ -37,6 +37,62 @@ router.get('/', async (req, res) => {
   }
 });
 
+// ── GET /api/vendedores/cadastro ──────────────────────────
+// Lista vendedores cadastrados
+router.get('/cadastro', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('vendedores')
+      .select('*')
+      .eq('ativo', true)
+      .order('nome', { ascending: true });
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    console.error('[GET /vendedores/cadastro]', err);
+    res.status(500).json({ error: 'Erro ao listar vendedores cadastrados' });
+  }
+});
+
+// ── POST /api/vendedores/cadastro ─────────────────────────
+// Cadastrar novo vendedor
+router.post('/cadastro', async (req, res) => {
+  try {
+    const nome = (req.body?.nome || '').trim();
+    if (!nome) return res.status(400).json({ error: 'Nome é obrigatório' });
+
+    const { data, error } = await supabase
+      .from('vendedores')
+      .insert({ nome })
+      .select()
+      .single();
+    if (error) {
+      if (error.code === '23505') return res.status(409).json({ error: 'Vendedor já cadastrado' });
+      throw error;
+    }
+    res.status(201).json(data);
+  } catch (err) {
+    console.error('[POST /vendedores/cadastro]', err);
+    res.status(500).json({ error: 'Erro ao cadastrar vendedor' });
+  }
+});
+
+// ── DELETE /api/vendedores/cadastro/:id ───────────────────
+// Remover vendedor (soft delete)
+router.delete('/cadastro/:id', async (req, res) => {
+  try {
+    const { error } = await supabase
+      .from('vendedores')
+      .update({ ativo: false })
+      .eq('id', req.params.id);
+    if (error) throw error;
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[DELETE /vendedores/cadastro/:id]', err);
+    res.status(500).json({ error: 'Erro ao remover vendedor' });
+  }
+});
+
 // ── GET /api/vendedores/:nome ──────────────────────────────
 // Vendas individuais de um vendedor
 router.get('/:nome', async (req, res) => {

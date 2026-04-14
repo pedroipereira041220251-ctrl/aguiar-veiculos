@@ -42,6 +42,7 @@ const venderSchema = z.object({
   data_venda:        z.string().optional(), // YYYY-MM-DD
   nome_comprador:    z.string().optional(),
   nome_vendedor:     z.string().optional(),
+  forma_pagamento:   z.string().optional(),
 });
 
 const documentacaoSchema = z.object({
@@ -237,7 +238,7 @@ router.patch('/:id/vender', async (req, res) => {
     const parsed = venderSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-    const { preco_venda_final, data_venda, nome_comprador, nome_vendedor } = parsed.data;
+    const { preco_venda_final, data_venda, nome_comprador, nome_vendedor, forma_pagamento } = parsed.data;
 
     // Buscar veículo e custos para calcular lucro_real na resposta
     const { data: veiculo, error: eV } = await supabase
@@ -259,8 +260,9 @@ router.patch('/:id/vender', async (req, res) => {
       data_venda: data_venda || dataHoje,
       status: 'vendido',
     };
-    if (nome_vendedor)  updatePayload.nome_vendedor  = nome_vendedor;
-    if (nome_comprador) updatePayload.nome_comprador = nome_comprador;
+    if (nome_vendedor)   updatePayload.nome_vendedor   = nome_vendedor;
+    if (nome_comprador)  updatePayload.nome_comprador  = nome_comprador;
+    if (forma_pagamento) updatePayload.forma_pagamento = forma_pagamento;
 
     const { data, error } = await supabase
       .from('veiculos')

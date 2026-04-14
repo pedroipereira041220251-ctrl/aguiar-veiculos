@@ -77,8 +77,13 @@ export const api = {
   },
 
   vendedores: {
-    listar:  () => req<VendedorResumo[]>('/api/vendedores'),
-    vendas:  (nome: string) => req<VendaVendedor[]>(`/api/vendedores/${encodeURIComponent(nome)}`),
+    listar:          () => req<VendedorResumo[]>('/api/vendedores'),
+    vendas:          (nome: string) => req<VendaVendedor[]>(`/api/vendedores/${encodeURIComponent(nome)}`),
+    cadastro: {
+      listar:  () => req<Vendedor[]>('/api/vendedores/cadastro'),
+      criar:   (nome: string) => req<Vendedor>('/api/vendedores/cadastro', { method: 'POST', body: JSON.stringify({ nome }) }),
+      deletar: (id: string) => req<void>(`/api/vendedores/cadastro/${id}`, { method: 'DELETE' }),
+    },
   },
 };
 
@@ -88,7 +93,7 @@ export interface Veiculo {
   cor: string; km: number; preco_compra: number; preco_venda: number;
   status: 'disponivel' | 'reservado' | 'vendido' | 'inativo';
   preco_venda_final?: number; data_venda?: string; obs?: string;
-  nome_vendedor?: string; nome_comprador?: string;
+  nome_vendedor?: string; nome_comprador?: string; forma_pagamento?: string;
   fipe_referencia?: number; criado_via: string; created_at: string;
   // Da view:
   total_custos: number; investimento_total: number; lucro_estimado: number;
@@ -162,6 +167,10 @@ export interface Alerta {
   tipo: 'ipva_vencendo' | 'docs_pendentes' | 'veiculo_parado';
   urgencia: 'alta' | 'media'; cor: string; veiculo_id: string;
   placa: string; descricao: string;
+}
+
+export interface Vendedor {
+  id: string; nome: string; ativo: boolean; created_at: string;
 }
 
 export interface VendedorResumo {

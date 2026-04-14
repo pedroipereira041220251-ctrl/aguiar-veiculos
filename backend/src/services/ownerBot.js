@@ -381,12 +381,19 @@ async function finalizarCadastro(dados, canal, ownerId) {
     }
 
     // Criar documentacao_veiculo
-    const docPayload = { veiculo_id: veiculo.id, transferencia_ok: dados.transferencia_ok };
+    const docPayload = {
+      veiculo_id:        veiculo.id,
+      transferencia_ok:  dados.transferencia_ok ?? false,
+      laudo_vistoria_ok: false,
+      dut_ok:            false,
+      crlv_ok:           false,
+    };
     if (dados.ipva_vencimento) {
       const parts = dados.ipva_vencimento.split('/');
       if (parts.length === 2) docPayload.ipva_vencimento = `${parts[1]}-${parts[0].padStart(2,'0')}-01`;
     }
-    await supabase.from('documentacao_veiculo').insert(docPayload);
+    const { error: docErr } = await supabase.from('documentacao_veiculo').insert(docPayload);
+    if (docErr) console.error('[ownerBot/finalizarCadastro/doc]', docErr.message);
 
     const lucroEst = dados.preco_venda - dados.preco_compra;
     const margem   = ((lucroEst / dados.preco_venda) * 100).toFixed(1);
@@ -583,7 +590,7 @@ async function handleEdicao(txt, data, norm, dados, canal, ownerId) {
 
     const { data: veiculo } = await supabase
       .from('veiculos')
-      .select('id, modelo, ano, preco_venda, km, cor, obs')
+      .select('id, modelo, ano, preco_venda, km, cor, obs, status')
       .eq('placa', placa)
       .neq('status', 'inativo')
       .maybeSingle();
@@ -728,30 +735,21 @@ async function handleCusto(txt, data, norm, dados, canal, ownerId) {
     if (!val || val <= 0) return txt_('⚠️ Valor inválido. Ex: 1500 ou 1.500,00');
     await upsertSession(canal, ownerId, { estado: 'custo', dados_parciais: { ...dados, step: 4, valor: val } });
     return buildConfirm(
-      '📝 *Observação* (opcional):',
-      [
-        { label: '💬 Adicionar', data: 'adicionar' },
-        { label: '⏭️ Pular',    data: 'pular'     },
-      ]
+      '📝 *Observação* (opcional):\n_(Digite a observação ou clique Pular)_',
+      [{ label: '⏭️ Pular', data: 'pular' }]
     );
   }
 
   // ── Step 4: descricao → salvar ────────────────────────
   if (step === 4) {
-    if (data === '1') data = 'adicionar';
     if (data === '2') data = 'pular';
-    const descricao = data === 'pular' ? null : (data === 'adicionar' ? null : txt);
+    const descricao = (data === 'pular' || data === '1' || norm === 'pular') ? null : txt;
 
-    if (data === 'adicionar' || norm === 'adicionar') {
-      await upsertSession(canal, ownerId, { estado: 'custo', dados_parciais: { ...dados, step: '4_obs' } });
-      return txt_('Digite a observação:');
+    if (!(data === 'pular' || data === '1' || norm === 'pular') && !txt) {
+      return buildConfirm('📝 *Observação* (opcional):\n_(Digite a observação ou clique Pular)_', [{ label: '⏭️ Pular', data: 'pular' }]);
     }
 
     return finalizarCusto({ ...dados, descricao }, canal, ownerId);
-  }
-
-  if (step === '4_obs') {
-    return finalizarCusto({ ...dados, descricao: txt }, canal, ownerId);
   }
 
   return buildMenuPrincipal(canal);
@@ -896,17 +894,54 @@ async function handleVenda(txt, data, norm, dados, canal, ownerId) {
   if (step === '2_pagamento') {
     const MAP = { '1': 'a_vista', '2': 'financiamento', '3': 'consorcio', '4': 'pular' };
     if (MAP[data]) data = MAP[data];
-    const formaMap = { a_vista: 'À vista', financiamento: 'Financiamento', consorcio: 'Consórcio' };
+    const formaMap = { 'a_vista': 'À vista', 'financiamento': 'Financiamento', 'consorcio': 'Consórcio' };
     const forma = formaMap[data] || (data === 'pular' ? null : txt) || null;
     await upsertSession(canal, ownerId, { estado: 'venda', dados_parciais: { ...dados, step: 3, forma_pagamento: forma } });
+
+    // Buscar vendedores cadastrados para listar
+    const { data: vendsCad } = await supabase
+      .from('vendedores')
+      .select('nome')
+      .eq('ativo', true)
+      .order('nome');
+
+    if (vendsCad?.length) {
+      const NUMS = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣'];
+      const btns = vendsCad.slice(0, 7).map((v, i) => ({ label: `${NUMS[i]} ${v.nome}`, data: `vend_${v.nome}` }));
+      btns.push({ label: '✍️ Outro', data: 'vend_outro' });
+      btns.push({ label: '⏭️ Pular', data: 'pular' });
+      await upsertSession(canal, ownerId, {
+        estado: 'venda',
+        dados_parciais: { ...dados, step: 3, forma_pagamento: forma, vendedores_lista: vendsCad.map(v => v.nome) },
+      });
+      return buildConfirm('🧑‍💼 *Vendedor responsável:*', btns);
+    }
+
     return buildConfirm(
       '🧑‍💼 *Nome do vendedor?*\n_(Digite o nome ou clique Pular)_',
       [{ label: '⏭️ Pular', data: 'pular' }]
     );
   }
 
-  // ── Step 3: vendedor (digita nome diretamente ou 'pular'/'1') ──
+  // ── Step 3: vendedor ──────────────────────────────────
   if (step === 3) {
+    // Mapeamento numérico para vendedores da lista
+    if (dados.vendedores_lista?.length) {
+      const idx = parseInt(data, 10) - 1;
+      if (!isNaN(idx) && idx >= 0 && idx < dados.vendedores_lista.length) {
+        data = `vend_${dados.vendedores_lista[idx]}`;
+      }
+      if (data === 'vend_outro' || norm === 'outro') {
+        await upsertSession(canal, ownerId, { estado: 'venda', dados_parciais: { ...dados, step: '3_nome' } });
+        return txt_('Digite o nome do vendedor:');
+      }
+      if (data?.startsWith('vend_')) {
+        const nomeVend = data.slice(5);
+        await upsertSession(canal, ownerId, { estado: 'venda', dados_parciais: { ...dados, step: 4, nome_vendedor: nomeVend } });
+        return buildConfirm('👤 *Nome do comprador?*\n_(Digite o nome ou clique Pular)_', [{ label: '⏭️ Pular', data: 'pular' }]);
+      }
+    }
+    // Sem lista cadastrada — fluxo normal
     if (data === '1' || data === 'pular' || norm === 'pular') {
       await upsertSession(canal, ownerId, { estado: 'venda', dados_parciais: { ...dados, step: 4, nome_vendedor: null } });
     } else {
@@ -916,6 +951,13 @@ async function handleVenda(txt, data, norm, dados, canal, ownerId) {
       '👤 *Nome do comprador?*\n_(Digite o nome ou clique Pular)_',
       [{ label: '⏭️ Pular', data: 'pular' }]
     );
+  }
+
+  // ── Step 3_nome: digitar nome de vendedor manualmente ─
+  if (step === '3_nome') {
+    const nomeVend = txt.trim() || null;
+    await upsertSession(canal, ownerId, { estado: 'venda', dados_parciais: { ...dados, step: 4, nome_vendedor: nomeVend } });
+    return buildConfirm('👤 *Nome do comprador?*\n_(Digite o nome ou clique Pular)_', [{ label: '⏭️ Pular', data: 'pular' }]);
   }
 
   // ── Step 4: comprador → finalizar ─────────────────────
@@ -934,8 +976,9 @@ async function finalizarVenda(dados, canal, ownerId) {
       data_venda:        (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })(),
       status:            'vendido',
     };
-    if (dados.nome_vendedor)  updatePayload.nome_vendedor  = dados.nome_vendedor;
-    if (dados.nome_comprador) updatePayload.nome_comprador = dados.nome_comprador;
+    if (dados.nome_vendedor)   updatePayload.nome_vendedor   = dados.nome_vendedor;
+    if (dados.nome_comprador)  updatePayload.nome_comprador  = dados.nome_comprador;
+    if (dados.forma_pagamento) updatePayload.forma_pagamento = dados.forma_pagamento;
 
     const { error } = await supabase
       .from('veiculos')
@@ -1037,7 +1080,7 @@ async function consultarLeads() {
 
   const { data: leads } = await supabase
     .from('leads')
-    .select('nome, canal, status_funil, atendimento_humano, score_qualificacao, veiculos:veiculo_interesse_id(modelo, ano)')
+    .select('nome, contato, canal, status_funil, atendimento_humano, score_qualificacao, veiculos:veiculo_interesse_id(modelo, ano)')
     .gte('created_at', desde)
     .order('created_at', { ascending: false });
 
@@ -1048,7 +1091,8 @@ async function consultarLeads() {
     const humano  = l.atendimento_humano ? ' 🤝' : '';
     const score   = l.score_qualificacao ? ` ⭐${l.score_qualificacao}` : '';
     const canal   = l.canal === 'whatsapp' ? 'WA' : 'IG';
-    return `• ${l.nome || 'Sem nome'} [${canal}${humano}${score}] — ${veiculo}`;
+    const fone    = l.contato ? ` · ${l.contato}` : '';
+    return `• ${l.nome || 'Sem nome'}${fone} [${canal}${humano}${score}] — ${veiculo}`;
   }).join('\n');
 
   return txt_(`👥 *Leads nas últimas 24h* (${leads.length})\n\n${lista}`);

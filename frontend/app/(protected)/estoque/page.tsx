@@ -39,12 +39,18 @@ export default function EstoquePage() {
   const [busca, setBusca]       = useState('');
   const [status, setStatus]     = useState('disponivel');
 
+  const [todos, setTodos] = useState<Veiculo[]>([]);
+
   const carregar = useCallback(async () => {
     setLoading(true);
     setErro(false);
     try {
-      const data = await api.veiculos.listar({ status });
-      setVeiculos(data);
+      const [filtrados, todosList] = await Promise.all([
+        api.veiculos.listar({ status }),
+        api.veiculos.listar({}),
+      ]);
+      setVeiculos(filtrados);
+      setTodos(todosList);
     } catch {
       setErro(true);
     } finally {
@@ -55,7 +61,7 @@ export default function EstoquePage() {
   useEffect(() => { carregar(); }, [carregar]);
 
   const filtrados = busca.trim()
-    ? veiculos.filter(v => {
+    ? todos.filter(v => {
         const q = busca.toLowerCase();
         return v.placa.toLowerCase().includes(q)
           || v.modelo.toLowerCase().includes(q)
@@ -192,15 +198,22 @@ function VeiculoCard({ v }: { v: Veiculo }) {
 
         <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-border">
           <div>
-            <p className="text-xs text-text-muted">Preço de venda</p>
-            <p className="text-sm font-bold text-text-primary">{fmt(v.preco_venda)}</p>
+            <p className="text-xs text-text-muted">{v.status === 'vendido' ? 'Vendido por' : 'Preço de venda'}</p>
+            <p className="text-sm font-bold text-text-primary">
+              {fmt(v.status === 'vendido' && v.preco_venda_final ? v.preco_venda_final : v.preco_venda)}
+            </p>
           </div>
           <div className="text-right">
-            <p className="text-xs text-text-muted">Lucro est.</p>
-            <p className={cn('text-sm font-semibold flex items-center gap-0.5 justify-end', v.lucro_estimado >= 0 ? 'text-green-400' : 'text-red-400')}>
-              <TrendingUp size={12} />
-              {fmt(v.lucro_estimado)}
-            </p>
+            <p className="text-xs text-text-muted">{v.status === 'vendido' ? 'Lucro real' : 'Lucro est.'}</p>
+            {(() => {
+              const lucro = v.status === 'vendido' ? (v.lucro_real ?? v.lucro_estimado) : v.lucro_estimado;
+              return (
+                <p className={cn('text-sm font-semibold flex items-center gap-0.5 justify-end', lucro >= 0 ? 'text-green-400' : 'text-red-400')}>
+                  <TrendingUp size={12} />
+                  {fmt(lucro)}
+                </p>
+              );
+            })()}
           </div>
         </div>
       </div>

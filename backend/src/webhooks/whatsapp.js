@@ -84,19 +84,9 @@ async function rotearDono(phone, texto, body) {
     .eq('owner_id', phone)
     .maybeSingle();
 
-  // Verificar timeout de 30 minutos
-  if (sessao?.modo_gestao || sessao?.estado) {
-    const diffMin = (Date.now() - new Date(sessao.updated_at).getTime()) / 60000;
-    if (diffMin > 30) {
-      await resetarSessao(phone, 'whatsapp');
-      await sendText(phone, 'Sessão expirada. Mande /menu para recomeçar.');
-      return;
-    }
-  }
-
   const textoNorm = texto?.trim().toLowerCase();
 
-  // Ativar menu explicitamente
+  // /menu sempre funciona — inicia sessão nova sem exibir "sessão expirada"
   if (textoNorm === '/menu' || textoNorm === 'menu') {
     console.log('[rotearDono] ativando menu para', phone);
     const resultado = await activateMenu('whatsapp', phone);
@@ -104,6 +94,16 @@ async function rotearDono(phone, texto, body) {
     await enviarResposta(phone, resultado, 'whatsapp');
     console.log('[rotearDono] resposta enviada');
     return;
+  }
+
+  // Verificar timeout de 30 minutos (só se não for /menu)
+  if (sessao?.modo_gestao || sessao?.estado) {
+    const diffMin = (Date.now() - new Date(sessao.updated_at).getTime()) / 60000;
+    if (diffMin > 30) {
+      await resetarSessao(phone, 'whatsapp');
+      await sendText(phone, 'Sessão expirada. Mande /menu para recomeçar.');
+      return;
+    }
   }
 
   // Se em modo gestão ou com estado de wizard ativo → processar no bot

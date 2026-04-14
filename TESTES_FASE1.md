@@ -9,7 +9,7 @@
 
 ---
 
-## ⚠️ MIGRAÇÕES OBRIGATÓRIAS — confirmar antes de testar
+## ⚠️ MIGRAÇÕES OBRIGATÓRIAS — rodar no SQL Editor do Supabase antes de testar
 
 ```sql
 -- 1. Adicionar colunas à tabela veiculos
@@ -24,9 +24,12 @@ CREATE TABLE IF NOT EXISTS vendedores (
   ativo      boolean DEFAULT true,
   created_at timestamptz DEFAULT now()
 );
+ALTER TABLE vendedores ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "authenticated_all_vendedores"
+  ON vendedores FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
--- 3. ⚠️ CRÍTICO: recriar a view para incluir forma_pagamento
---    CREATE OR REPLACE falha se colunas mudaram de posição — precisa DROP + CREATE
+-- 3. ⚠️ OBRIGATÓRIO: recriar a view após o ALTER TABLE
+--    (v.* é expandido na criação — precisa DROP + CREATE para incluir forma_pagamento)
 DROP VIEW IF EXISTS vw_veiculos_com_financeiro;
 CREATE VIEW vw_veiculos_com_financeiro AS
 SELECT
@@ -50,24 +53,20 @@ SELECT
 FROM veiculos v
 LEFT JOIN custos_veiculo c ON c.veiculo_id = v.id
 GROUP BY v.id;
-
--- 4. RLS para vendedores
-ALTER TABLE vendedores ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "authenticated_all_vendedores"
-  ON vendedores FOR ALL TO authenticated USING (true) WITH CHECK (true);
 ```
 
 ---
 
 ## PRÉ-REQUISITO
 
-- [x] Backend ativo no Railway
+- [x] Backend ativo no Railway (deploy `8e02428`)
 - [x] Frontend rodando em `localhost:3000`
 - [x] WhatsApp conectado ao Z-API
 - [x] Número do dono configurado em `OWNER_PHONE_NUMBER`
 - [x] Bot do Telegram criado e `TELEGRAM_BOT_TOKEN` configurado
 - [x] `TELEGRAM_OWNER_CHAT_ID` configurado
 - [x] Webhook do Telegram configurado
+- [x] Migrações SQL acima rodadas no Supabase
 
 ---
 
@@ -104,7 +103,7 @@ CREATE POLICY "authenticated_all_vendedores"
 
 ### 3C — Fotos via WhatsApp 🔁
 
-> Corrigido: agora usa `body.image.imageUrl` (campo real confirmado em log de produção).
+> Corrigido: usa `body.image.imageUrl` (campo real confirmado em log de produção).
 
 | # | Status | Ação | Resultado esperado |
 |---|--------|------|--------------------|
@@ -118,7 +117,7 @@ CREATE POLICY "authenticated_all_vendedores"
 
 ## BLOCO 4 — Lançar Custo 🔁
 
-> Corrigido: observação pede o texto direto (sem etapa "Adicionar").
+> Corrigido: observação pede texto direto (sem etapa "Adicionar"); custo bloqueado em vendidos.
 
 | # | Status | Ação | Resultado esperado |
 |---|--------|------|--------------------|
@@ -132,7 +131,8 @@ CREATE POLICY "authenticated_all_vendedores"
 
 ## BLOCO 5 — Registrar Venda 🔁
 
-> Corrigido: edição de vendido bloqueada; forma_pagamento salvo; comprador/pagamento aparecem no cartão.
+> Corrigido: edição de vendido bloqueada; `forma_pagamento` salvo; comprador/pagamento exibidos no detalhe.
+> ⚠️ Requer migração 3 (recriar view) para `forma_pagamento` aparecer.
 
 | # | Status | Ação | Resultado esperado |
 |---|--------|------|--------------------|
@@ -173,7 +173,7 @@ CREATE POLICY "authenticated_all_vendedores"
 
 ## BLOCO 8 — Agente de IA 🔁
 
-> Corrigido: solicita nome; leads criados fora do horário.
+> Corrigido: solicita nome do cliente; leads criados mesmo fora do horário.
 
 | # | Status | Ação | Resultado esperado |
 |---|--------|------|--------------------|
@@ -211,16 +211,18 @@ CREATE POLICY "authenticated_all_vendedores"
 | 9B.10 | ⬜ | `+ Novo veículo` → digitar placa → Consultar | FIPE preenche campo automaticamente |
 | 9B.11 | ⬜ | Salvar novo veículo pelo painel | Card aparece no estoque |
 
-### 9C — CRM
+### 9C — CRM 🔁
 
 | # | Status | Ação | Resultado esperado |
 |---|--------|------|--------------------|
 | 9C.1 | ✅ | Acessar `/crm` | Kanban com colunas |
 | 9C.2 | ✅ | Clicar em lead | Drawer com histórico |
 | 9C.3 | ✅ | Clicar "Assumir" | Status muda para atendimento humano |
-| 9C.4 | ❌ | Arrastar lead entre colunas | Drag & drop com problemas — pendente |
+| 9C.4 | 🔁 | Arrastar lead entre colunas | Card move para a coluna destino; drawer não abre ao soltar |
 
 ### 9D — Venda pelo painel 🔁
+
+> ⚠️ Requer migração 3 (recriar view) para `forma_pagamento` aparecer no detalhe.
 
 | # | Status | Ação | Resultado esperado |
 |---|--------|------|--------------------|
@@ -259,6 +261,8 @@ CREATE POLICY "authenticated_all_vendedores"
 
 ## BLOCO 13 — Telegram: Custo, Venda e Edição 🔁
 
+> ⚠️ Requer migração 3 (recriar view) para `forma_pagamento` aparecer no detalhe.
+
 | # | Status | Ação | Resultado esperado |
 |---|--------|------|--------------------|
 | 13.1 | ✅ | Lançar custo | "Custos salvos." |
@@ -286,7 +290,7 @@ CREATE POLICY "authenticated_all_vendedores"
 
 ## BLOCO 16 — Vendedores 🔁
 
-> ⚠️ Rodar migração SQL da tabela `vendedores` antes de testar.
+> ⚠️ Rodar migrações 2 e 3 antes de testar.
 
 | # | Status | Ação | Resultado esperado |
 |---|--------|------|--------------------|
@@ -314,8 +318,8 @@ CREATE POLICY "authenticated_all_vendedores"
 | 8 — Agente IA | 🔁 retestar nome + fora do horário |
 | 9A — Dashboard | ✅ |
 | 9A.4 — Configurações | 🔁 retestar salvar |
-| 9B — Estoque | 🔁 retestar busca + IPVA edit |
-| 9C — CRM | ✅ (drag & drop ❌ pendente) |
+| 9B — Estoque | 🔁 retestar busca + IPVA edit + novo veículo |
+| 9C — CRM | 🔁 retestar drag & drop |
 | 9D — Venda painel | 🔁 retestar pagamento + card |
 | 10 — Casos extremos | ✅ |
 | 11 — Telegram: menu | ✅ |
@@ -329,6 +333,4 @@ CREATE POLICY "authenticated_all_vendedores"
 
 ---
 
-*Atualizado em 14/04/2026 — deploy b71be38*
-
-> **Atenção:** se `forma_pagamento` não aparece nos detalhes do veículo vendido, a migração 3 (recriar view) não foi rodada ainda.
+*Atualizado em 14/04/2026 — deploy `8e02428`*

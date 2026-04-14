@@ -62,8 +62,10 @@ export const api = {
   },
 
   financeiro: {
-    resumo:     (mes?: string) => req<FinanceiroResumo>(`/api/financeiro/resumo${mes ? `?mes=${mes}` : ''}`),
-    estoque:    () => req<FinanceiroEstoque>('/api/financeiro/estoque'),
+    resumo:      (mes?: string) => req<FinanceiroResumo>(`/api/financeiro/resumo${mes ? `?mes=${mes}` : ''}`),
+    ranking:     (mes?: string) => req<FinanceiroRanking[]>(`/api/financeiro/ranking${mes ? `?mes=${mes}` : ''}`),
+    estoque:     () => req<FinanceiroEstoque>('/api/financeiro/estoque'),
+    categorias:  (mes?: string) => req<FinanceiroCategoria[]>(`/api/financeiro/categorias${mes ? `?mes=${mes}` : ''}`),
   },
 
   alertas: {
@@ -145,6 +147,17 @@ export interface FinanceiroResumo {
 
 export interface FinanceiroEstoque {
   qtd_veiculos: number; total_investido: number; lucro_estimado: number; margem_media: number;
+  veiculos: { id: string; placa: string; modelo: string; ano: number; investimento_total: number; lucro_estimado: number; margem_pct: number; preco_venda: number }[];
+}
+
+export interface FinanceiroRanking {
+  id: string; placa: string; marca: string; modelo: string; ano: number;
+  preco_venda_final: number; preco_compra: number; total_custos: number;
+  lucro_real: number; margem_pct: number; data_venda: string;
+}
+
+export interface FinanceiroCategoria {
+  tipo: string; total: number; qtd: number;
 }
 
 export interface BotsStatus {

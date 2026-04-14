@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Car, Users, Bell, Settings, LogOut, ChevronLeft, ChevronRight, UserCheck } from 'lucide-react';
+import { LayoutDashboard, Car, Users, Bell, Settings, LogOut, ChevronLeft, ChevronRight, UserCheck, DollarSign } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase-browser';
 import { useState } from 'react';
@@ -12,6 +12,7 @@ const links = [
   { href: '/dashboard',     label: 'Dashboard',    icon: LayoutDashboard },
   { href: '/estoque',       label: 'Estoque',      icon: Car },
   { href: '/crm',           label: 'CRM',          icon: Users },
+  { href: '/financeiro',    label: 'Financeiro',   icon: DollarSign },
   { href: '/vendedores',    label: 'Vendedores',   icon: UserCheck },
   { href: '/alertas',       label: 'Alertas',      icon: Bell },
   { href: '/configuracoes', label: 'Configurações', icon: Settings },

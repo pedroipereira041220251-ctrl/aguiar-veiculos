@@ -76,44 +76,52 @@ async function processarMensagem(body) {
 
 // ── rotearDono ─────────────────────────────────────────────
 async function rotearDono(phone, texto, body) {
-  // Buscar sessão do dono (canal=whatsapp)
-  const { data: sessao } = await supabase
-    .from('bot_sessions')
-    .select('*')
-    .eq('canal', 'whatsapp')
-    .eq('owner_id', phone)
-    .maybeSingle();
+  try {
+    // Buscar sessão do dono (canal=whatsapp)
+    const { data: sessao, error: sessaoErr } = await supabase
+      .from('bot_sessions')
+      .select('*')
+      .eq('canal', 'whatsapp')
+      .eq('owner_id', phone)
+      .maybeSingle();
 
-  const textoNorm = texto?.trim().toLowerCase();
+    if (sessaoErr) {
+      console.error('[rotearDono] erro ao buscar sessão:', sessaoErr.message);
+    }
 
-  // /menu sempre funciona — inicia sessão nova sem exibir "sessão expirada"
-  if (textoNorm === '/menu' || textoNorm === 'menu') {
-    console.log('[rotearDono] ativando menu para', phone);
-    const resultado = await activateMenu('whatsapp', phone);
-    console.log('[rotearDono] resultado:', JSON.stringify(resultado));
-    await enviarResposta(phone, resultado, 'whatsapp');
-    console.log('[rotearDono] resposta enviada');
-    return;
-  }
+    const textoNorm = texto?.trim().toLowerCase();
 
-  // Verificar timeout de 30 minutos (só se não for /menu)
-  if (sessao?.modo_gestao || sessao?.estado) {
-    const diffMin = (Date.now() - new Date(sessao.updated_at).getTime()) / 60000;
-    if (diffMin > 30) {
-      await resetarSessao(phone, 'whatsapp');
-      await sendText(phone, 'Sessão expirada. Mande /menu para recomeçar.');
+    // /menu sempre funciona — inicia sessão nova sem exibir "sessão expirada"
+    if (textoNorm === '/menu' || textoNorm === 'menu') {
+      const resultado = await activateMenu('whatsapp', phone);
+      await enviarResposta(phone, resultado, 'whatsapp');
       return;
     }
-  }
 
-  // Se em modo gestão ou com estado de wizard ativo → processar no bot
-  if (sessao?.modo_gestao || sessao?.estado) {
-    const resultado = await ownerBotHandler({ text: texto, canal: 'whatsapp', owner_id: phone, body });
-    if (resultado) await enviarResposta(phone, resultado, 'whatsapp');
-    return;
-  }
+    // Verificar timeout de 30 minutos (só se não for /menu)
+    if (sessao?.modo_gestao || sessao?.estado) {
+      const diffMin = (Date.now() - new Date(sessao.updated_at).getTime()) / 60000;
+      if (diffMin > 30) {
+        await resetarSessao(phone, 'whatsapp');
+        await sendText(phone, 'Sessão expirada. Mande /menu para recomeçar.');
+        return;
+      }
+    }
 
-  // Dono sem sessão ativa e sem /menu → ignorar silenciosamente (seção 4.1)
+    // Se em modo gestão ou com estado de wizard ativo → processar no bot
+    if (sessao?.modo_gestao || sessao?.estado) {
+      const resultado = await ownerBotHandler({ text: texto, canal: 'whatsapp', owner_id: phone, body });
+      if (resultado) await enviarResposta(phone, resultado, 'whatsapp');
+      return;
+    }
+
+    // Dono sem sessão ativa e sem /menu → ignorar silenciosamente (seção 4.1)
+
+  } catch (err) {
+    console.error('[rotearDono] erro inesperado:', err.message, err.stack);
+    // Avisar o dono em vez de silenciosamente ignorar
+    await sendText(phone, '⚠️ Erro interno. Mande /menu para recomeçar.').catch(() => {});
+  }
 }
 
 // ── rotearCliente ──────────────────────────────────────────

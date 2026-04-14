@@ -8,7 +8,7 @@ import {
 import { useDroppable, useDraggable } from '@dnd-kit/core';
 import { api, type Lead } from '@/lib/api';
 import { FUNIL_LABEL, cn } from '@/lib/utils';
-import { Users, Handshake, RefreshCw, UserCheck, X, MessageSquare, Phone, Instagram } from 'lucide-react';
+import { Users, Handshake, RefreshCw, UserCheck, X, ArrowRightLeft } from 'lucide-react';
 
 type Mensagem = { role: string; content: string; timestamp: string; tipo?: string };
 type LeadDetalhe = Lead & { conversas: { mensagens: Mensagem[]; canal: string; ultima_mensagem_at: string }[] };
@@ -35,6 +35,15 @@ const COR_HEADER: Record<string, string> = {
   perdido:  'text-text-muted',
 };
 
+const COR_FUNIL: Record<string, string> = {
+  novo:     'bg-blue-400/10 text-blue-400 hover:bg-blue-400/20',
+  contato:  'bg-amber-400/10 text-amber-400 hover:bg-amber-400/20',
+  visita:   'bg-orange-400/10 text-orange-400 hover:bg-orange-400/20',
+  proposta: 'bg-violet-400/10 text-violet-400 hover:bg-violet-400/20',
+  fechado:  'bg-green-400/10 text-green-400 hover:bg-green-400/20',
+  perdido:  'bg-white/5 text-text-muted hover:bg-white/10',
+};
+
 const COR_SCORE: Record<number, string> = {
   1: 'bg-white/5 text-text-muted',
   2: 'bg-blue-400/10 text-blue-400',
@@ -49,10 +58,10 @@ export default function CRMPage() {
   const [erro, setErro]                 = useState(false);
   const [activeId, setActiveId]         = useState<string | null>(null);
   const [assumindo, setAssumindo]       = useState<string | null>(null);
+  const [movendoId, setMovendoId]       = useState<string | null>(null);
   const [drawerLead, setDrawerLead]     = useState<LeadDetalhe | null>(null);
   const [loadingDrawer, setLoadingDrawer] = useState(false);
 
-  // Ref sempre atualizado — evita stale closure em handleDragEnd
   const leadsRef = useRef<Lead[]>([]);
   useEffect(() => { leadsRef.current = leads; }, [leads]);
 
@@ -77,13 +86,14 @@ export default function CRMPage() {
 
   function handleDragStart({ active }: DragStartEvent) {
     setActiveId(active.id as string);
+    setMovendoId(null);
   }
 
   async function handleDragEnd({ active, over }: DragEndEvent) {
     setActiveId(null);
     if (!over) return;
     const leadId  = active.id as string;
-    const current = leadsRef.current; // sempre o valor mais recente
+    const current = leadsRef.current;
 
     let novoStatus = over.id as Lead['status_funil'];
     if (!COLUNAS.includes(novoStatus)) {
@@ -95,6 +105,18 @@ export default function CRMPage() {
     const lead = current.find(l => l.id === leadId);
     if (!lead || lead.status_funil === novoStatus) return;
 
+    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status_funil: novoStatus } : l));
+    try {
+      await api.leads.editar(leadId, { status_funil: novoStatus });
+    } catch {
+      setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status_funil: lead.status_funil } : l));
+    }
+  }
+
+  async function moverLead(leadId: string, novoStatus: Lead['status_funil']) {
+    const lead = leadsRef.current.find(l => l.id === leadId);
+    if (!lead || lead.status_funil === novoStatus) { setMovendoId(null); return; }
+    setMovendoId(null);
     setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status_funil: novoStatus } : l));
     try {
       await api.leads.editar(leadId, { status_funil: novoStatus });
@@ -146,7 +168,7 @@ export default function CRMPage() {
   );
 
   return (
-    <div className="p-4 md:p-6">
+    <div className="p-4 md:p-6" onClick={() => setMovendoId(null)}>
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-xl font-bold text-text-primary">CRM</h1>
         <span className="text-sm text-text-muted">{leads.length} lead{leads.length !== 1 ? 's' : ''}</span>
@@ -173,9 +195,12 @@ export default function CRMPage() {
                 id={col}
                 leads={leads.filter(l => l.status_funil === col)}
                 activeId={activeId}
+                movendoId={movendoId}
                 onAssumir={assumir}
                 assumindo={assumindo}
                 onAbrir={abrirDrawer}
+                onMover={moverLead}
+                onToggleMover={(id) => setMovendoId(prev => prev === id ? null : id)}
               />
             ))}
           </div>
@@ -191,16 +216,18 @@ export default function CRMPage() {
                   id={col}
                   leads={colLeads}
                   activeId={activeId}
+                  movendoId={movendoId}
                   onAssumir={assumir}
                   assumindo={assumindo}
                   onAbrir={abrirDrawer}
+                  onMover={moverLead}
+                  onToggleMover={(id) => setMovendoId(prev => prev === id ? null : id)}
                   mobile
                 />
               );
             })}
           </div>
 
-          {/* DragOverlay: renderiza o card flutuante SEM useDraggable */}
           <DragOverlay dropAnimation={null}>
             {activeLead && (
               <LeadCardContent
@@ -208,6 +235,9 @@ export default function CRMPage() {
                 onAssumir={() => {}}
                 assumindo={null}
                 onAbrir={() => {}}
+                onMover={() => {}}
+                onToggleMover={() => {}}
+                movendoAberto={false}
                 floating
               />
             )}
@@ -261,13 +291,16 @@ export default function CRMPage() {
   );
 }
 
-function Coluna({ id, leads, activeId, onAssumir, assumindo, onAbrir, mobile }: {
+function Coluna({ id, leads, activeId, movendoId, onAssumir, assumindo, onAbrir, onMover, onToggleMover, mobile }: {
   id: Lead['status_funil'];
   leads: Lead[];
   activeId: string | null;
+  movendoId: string | null;
   onAssumir: (id: string) => void;
   assumindo: string | null;
   onAbrir: (id: string) => void;
+  onMover: (id: string, status: Lead['status_funil']) => void;
+  onToggleMover: (id: string) => void;
   mobile?: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id });
@@ -296,9 +329,12 @@ function Coluna({ id, leads, activeId, onAssumir, assumindo, onAbrir, mobile }: 
             key={lead.id}
             lead={lead}
             isDraggingThis={activeId === lead.id}
+            movendoAberto={movendoId === lead.id}
             onAssumir={onAssumir}
             assumindo={assumindo}
             onAbrir={onAbrir}
+            onMover={onMover}
+            onToggleMover={onToggleMover}
           />
         ))}
       </div>
@@ -306,13 +342,15 @@ function Coluna({ id, leads, activeId, onAssumir, assumindo, onAbrir, mobile }: 
   );
 }
 
-// ── LeadCard: wrapper com useDraggable ─────────────────────
-function LeadCard({ lead, isDraggingThis, onAssumir, assumindo, onAbrir }: {
+function LeadCard({ lead, isDraggingThis, movendoAberto, onAssumir, assumindo, onAbrir, onMover, onToggleMover }: {
   lead: Lead;
   isDraggingThis: boolean;
+  movendoAberto: boolean;
   onAssumir: (id: string) => void;
   assumindo: string | null;
   onAbrir: (id: string) => void;
+  onMover: (id: string, status: Lead['status_funil']) => void;
+  onToggleMover: (id: string) => void;
 }) {
   const { attributes, listeners, setNodeRef } = useDraggable({ id: lead.id });
   const pointerStart = useRef<{ x: number; y: number } | null>(null);
@@ -327,13 +365,11 @@ function LeadCard({ lead, isDraggingThis, onAssumir, assumindo, onAbrir }: {
         listeners?.onPointerDown?.(e);
       }}
       onClick={(e) => {
-        // Cancela click se o pointer se moveu mais de 8px (foi drag)
         const s = pointerStart.current;
         if (s && Math.hypot(e.clientX - s.x, e.clientY - s.y) > 8) {
           e.stopPropagation();
           return;
         }
-        // Não abre drawer ao clicar no botão Assumir (ele usa stopPropagation)
         onAbrir(lead.id);
       }}
       className={cn(isDraggingThis && 'invisible')}
@@ -342,18 +378,23 @@ function LeadCard({ lead, isDraggingThis, onAssumir, assumindo, onAbrir }: {
         lead={lead}
         onAssumir={onAssumir}
         assumindo={assumindo}
-        onAbrir={() => {}} // click tratado no wrapper acima
+        onAbrir={() => {}}
+        onMover={onMover}
+        onToggleMover={onToggleMover}
+        movendoAberto={movendoAberto}
       />
     </div>
   );
 }
 
-// ── LeadCardContent: visual puro, sem hooks de drag ────────
-function LeadCardContent({ lead, onAssumir, assumindo, onAbrir, floating }: {
+function LeadCardContent({ lead, onAssumir, assumindo, onAbrir, onMover, onToggleMover, movendoAberto, floating }: {
   lead: Lead;
   onAssumir: (id: string) => void;
   assumindo: string | null;
   onAbrir: (id: string) => void;
+  onMover: (id: string, status: Lead['status_funil']) => void;
+  onToggleMover: (id: string) => void;
+  movendoAberto: boolean;
   floating?: boolean;
 }) {
   return (
@@ -366,10 +407,49 @@ function LeadCardContent({ lead, onAssumir, assumindo, onAbrir, floating }: {
           : 'cursor-grab hover:border-primary/40 transition-colors',
       )}
     >
-      <p className="text-sm font-semibold text-text-primary leading-tight truncate">
-        {lead.nome || lead.contato}
-      </p>
-      <p className="text-xs text-text-muted mt-0.5 capitalize">{lead.canal}</p>
+      {/* Header: nome + botão mover */}
+      <div className="flex items-start justify-between gap-1">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-text-primary leading-tight truncate">
+            {lead.nome || lead.contato}
+          </p>
+          <p className="text-xs text-text-muted mt-0.5 capitalize">{lead.canal}</p>
+        </div>
+        {!floating && (
+          <button
+            onPointerDown={e => e.stopPropagation()}
+            onClick={e => { e.stopPropagation(); onToggleMover(lead.id); }}
+            title="Mover para coluna"
+            className={cn(
+              'flex-shrink-0 p-1 rounded-lg transition-colors',
+              movendoAberto
+                ? 'bg-primary/15 text-primary'
+                : 'text-text-muted hover:text-text-primary hover:bg-white/5',
+            )}
+          >
+            <ArrowRightLeft size={12} />
+          </button>
+        )}
+      </div>
+
+      {/* Seletor de colunas */}
+      {movendoAberto && !floating && (
+        <div
+          onPointerDown={e => e.stopPropagation()}
+          onClick={e => e.stopPropagation()}
+          className="mt-2 flex flex-wrap gap-1"
+        >
+          {COLUNAS.filter(c => c !== lead.status_funil).map(col => (
+            <button
+              key={col}
+              onClick={e => { e.stopPropagation(); onMover(lead.id, col); }}
+              className={cn('text-[10px] font-semibold px-2 py-1 rounded-lg transition-colors', COR_FUNIL[col])}
+            >
+              {FUNIL_LABEL[col]}
+            </button>
+          ))}
+        </div>
+      )}
 
       {lead.veiculo && (
         <p className="text-xs text-text-muted mt-1.5 truncate">

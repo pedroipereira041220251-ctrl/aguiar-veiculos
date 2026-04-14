@@ -1,11 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import {
-  DndContext, DragEndEvent, DragOverlay, DragStartEvent,
-  pointerWithin, PointerSensor, useSensor, useSensors,
-} from '@dnd-kit/core';
-import { useDroppable, useDraggable } from '@dnd-kit/core';
 import { api, type Lead } from '@/lib/api';
 import { FUNIL_LABEL, cn } from '@/lib/utils';
 import { Users, Handshake, RefreshCw, UserCheck, X, ArrowRightLeft } from 'lucide-react';
@@ -56,7 +51,6 @@ export default function CRMPage() {
   const [leads, setLeads]               = useState<Lead[]>([]);
   const [loading, setLoading]           = useState(true);
   const [erro, setErro]                 = useState(false);
-  const [activeId, setActiveId]         = useState<string | null>(null);
   const [assumindo, setAssumindo]       = useState<string | null>(null);
   const [movendoId, setMovendoId]       = useState<string | null>(null);
   const [drawerLead, setDrawerLead]     = useState<LeadDetalhe | null>(null);
@@ -64,10 +58,6 @@ export default function CRMPage() {
 
   const leadsRef = useRef<Lead[]>([]);
   useEffect(() => { leadsRef.current = leads; }, [leads]);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-  );
 
   async function carregar() {
     setLoading(true);
@@ -83,35 +73,6 @@ export default function CRMPage() {
   }
 
   useEffect(() => { carregar(); }, []);
-
-  function handleDragStart({ active }: DragStartEvent) {
-    setActiveId(active.id as string);
-    setMovendoId(null);
-  }
-
-  async function handleDragEnd({ active, over }: DragEndEvent) {
-    setActiveId(null);
-    if (!over) return;
-    const leadId  = active.id as string;
-    const current = leadsRef.current;
-
-    let novoStatus = over.id as Lead['status_funil'];
-    if (!COLUNAS.includes(novoStatus)) {
-      const leadAlvo = current.find(l => l.id === over.id);
-      if (!leadAlvo) return;
-      novoStatus = leadAlvo.status_funil;
-    }
-
-    const lead = current.find(l => l.id === leadId);
-    if (!lead || lead.status_funil === novoStatus) return;
-
-    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status_funil: novoStatus } : l));
-    try {
-      await api.leads.editar(leadId, { status_funil: novoStatus });
-    } catch {
-      setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status_funil: lead.status_funil } : l));
-    }
-  }
 
   async function moverLead(leadId: string, novoStatus: Lead['status_funil']) {
     const lead = leadsRef.current.find(l => l.id === leadId);
@@ -149,8 +110,6 @@ export default function CRMPage() {
     }
   }
 
-  const activeLead = leads.find(l => l.id === activeId);
-
   if (loading) return (
     <div className="p-4 md:p-6 flex items-center justify-center min-h-[40vh]">
       <p className="text-sm text-text-muted">Carregando leads...</p>
@@ -181,12 +140,7 @@ export default function CRMPage() {
           <p className="text-xs text-text-muted/60 mt-1">Os leads chegam via WhatsApp ou Instagram.</p>
         </div>
       ) : (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={pointerWithin}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-        >
+        <>
           {/* Desktop: kanban horizontal */}
           <div className="hidden md:flex gap-3 overflow-x-auto pb-4">
             {COLUNAS.map(col => (
@@ -194,7 +148,6 @@ export default function CRMPage() {
                 key={col}
                 id={col}
                 leads={leads.filter(l => l.status_funil === col)}
-                activeId={activeId}
                 movendoId={movendoId}
                 onAssumir={assumir}
                 assumindo={assumindo}
@@ -215,7 +168,6 @@ export default function CRMPage() {
                   key={col}
                   id={col}
                   leads={colLeads}
-                  activeId={activeId}
                   movendoId={movendoId}
                   onAssumir={assumir}
                   assumindo={assumindo}
@@ -227,22 +179,7 @@ export default function CRMPage() {
               );
             })}
           </div>
-
-          <DragOverlay dropAnimation={null}>
-            {activeLead && (
-              <LeadCardContent
-                lead={activeLead}
-                onAssumir={() => {}}
-                assumindo={null}
-                onAbrir={() => {}}
-                onMover={() => {}}
-                onToggleMover={() => {}}
-                movendoAberto={false}
-                floating
-              />
-            )}
-          </DragOverlay>
-        </DndContext>
+        </>
       )}
 
       {/* ── Drawer de histórico ── */}
@@ -291,10 +228,9 @@ export default function CRMPage() {
   );
 }
 
-function Coluna({ id, leads, activeId, movendoId, onAssumir, assumindo, onAbrir, onMover, onToggleMover, mobile }: {
+function Coluna({ id, leads, movendoId, onAssumir, assumindo, onAbrir, onMover, onToggleMover, mobile }: {
   id: Lead['status_funil'];
   leads: Lead[];
-  activeId: string | null;
   movendoId: string | null;
   onAssumir: (id: string) => void;
   assumindo: string | null;
@@ -303,16 +239,12 @@ function Coluna({ id, leads, activeId, movendoId, onAssumir, assumindo, onAbrir,
   onToggleMover: (id: string) => void;
   mobile?: boolean;
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id });
-
   return (
     <div
-      ref={setNodeRef}
       className={cn(
-        'rounded-xl border-2 bg-card transition-colors',
+        'rounded-xl border-2 bg-card',
         mobile ? 'min-h-[80px]' : 'w-52 flex-shrink-0 min-h-[400px]',
         COR_COLUNA[id],
-        isOver && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
       )}
     >
       <div className="px-3 py-2.5 border-b border-border flex items-center justify-between">
@@ -325,10 +257,9 @@ function Coluna({ id, leads, activeId, movendoId, onAssumir, assumindo, onAbrir,
       </div>
       <div className="p-2 space-y-2">
         {leads.map(lead => (
-          <LeadCard
+          <LeadCardContent
             key={lead.id}
             lead={lead}
-            isDraggingThis={activeId === lead.id}
             movendoAberto={movendoId === lead.id}
             onAssumir={onAssumir}
             assumindo={assumindo}
@@ -342,52 +273,7 @@ function Coluna({ id, leads, activeId, movendoId, onAssumir, assumindo, onAbrir,
   );
 }
 
-function LeadCard({ lead, isDraggingThis, movendoAberto, onAssumir, assumindo, onAbrir, onMover, onToggleMover }: {
-  lead: Lead;
-  isDraggingThis: boolean;
-  movendoAberto: boolean;
-  onAssumir: (id: string) => void;
-  assumindo: string | null;
-  onAbrir: (id: string) => void;
-  onMover: (id: string, status: Lead['status_funil']) => void;
-  onToggleMover: (id: string) => void;
-}) {
-  const { attributes, listeners, setNodeRef } = useDraggable({ id: lead.id });
-  const pointerStart = useRef<{ x: number; y: number } | null>(null);
-
-  return (
-    <div
-      ref={setNodeRef}
-      {...attributes}
-      {...listeners}
-      onPointerDown={(e) => {
-        pointerStart.current = { x: e.clientX, y: e.clientY };
-        listeners?.onPointerDown?.(e);
-      }}
-      onClick={(e) => {
-        const s = pointerStart.current;
-        if (s && Math.hypot(e.clientX - s.x, e.clientY - s.y) > 8) {
-          e.stopPropagation();
-          return;
-        }
-        onAbrir(lead.id);
-      }}
-      className={cn(isDraggingThis && 'invisible')}
-    >
-      <LeadCardContent
-        lead={lead}
-        onAssumir={onAssumir}
-        assumindo={assumindo}
-        onAbrir={() => {}}
-        onMover={onMover}
-        onToggleMover={onToggleMover}
-        movendoAberto={movendoAberto}
-      />
-    </div>
-  );
-}
-
-function LeadCardContent({ lead, onAssumir, assumindo, onAbrir, onMover, onToggleMover, movendoAberto, floating }: {
+function LeadCardContent({ lead, onAssumir, assumindo, onAbrir, onMover, onToggleMover, movendoAberto }: {
   lead: Lead;
   onAssumir: (id: string) => void;
   assumindo: string | null;
@@ -395,17 +281,11 @@ function LeadCardContent({ lead, onAssumir, assumindo, onAbrir, onMover, onToggl
   onMover: (id: string, status: Lead['status_funil']) => void;
   onToggleMover: (id: string) => void;
   movendoAberto: boolean;
-  floating?: boolean;
 }) {
   return (
     <div
-      onClick={!floating ? () => onAbrir(lead.id) : undefined}
-      className={cn(
-        'bg-card-hover border border-border rounded-xl p-3 select-none',
-        floating
-          ? 'shadow-2xl border-primary/30 cursor-grabbing rotate-1 opacity-95'
-          : 'cursor-grab hover:border-primary/40 transition-colors',
-      )}
+      onClick={() => onAbrir(lead.id)}
+      className="bg-card-hover border border-border rounded-xl p-3 select-none cursor-pointer hover:border-primary/40 transition-colors"
     >
       {/* Header: nome + botão mover */}
       <div className="flex items-start justify-between gap-1">
@@ -415,8 +295,7 @@ function LeadCardContent({ lead, onAssumir, assumindo, onAbrir, onMover, onToggl
           </p>
           <p className="text-xs text-text-muted mt-0.5 capitalize">{lead.canal}</p>
         </div>
-        {!floating && (
-          <button
+        <button
             onPointerDown={e => e.stopPropagation()}
             onClick={e => { e.stopPropagation(); onToggleMover(lead.id); }}
             title="Mover para coluna"
@@ -433,7 +312,7 @@ function LeadCardContent({ lead, onAssumir, assumindo, onAbrir, onMover, onToggl
       </div>
 
       {/* Seletor de colunas */}
-      {movendoAberto && !floating && (
+      {movendoAberto && (
         <div
           onPointerDown={e => e.stopPropagation()}
           onClick={e => e.stopPropagation()}
@@ -471,7 +350,7 @@ function LeadCardContent({ lead, onAssumir, assumindo, onAbrir, onMover, onToggl
         )}
       </div>
 
-      {!lead.atendimento_humano && !floating && (
+      {!lead.atendimento_humano && (
         <button
           onPointerDown={e => e.stopPropagation()}
           onClick={e => { e.stopPropagation(); onAssumir(lead.id); }}

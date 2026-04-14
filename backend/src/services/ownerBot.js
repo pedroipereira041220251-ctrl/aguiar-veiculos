@@ -486,33 +486,72 @@ async function handleCadastroFotos(data, norm, dados, canal, ownerId, body) {
         || body?.message?.imageMessage != null;
 
       if (isImagem) {
-        // Z-API pode enviar a imagem como URL ou base64 em campos diferentes
-        // Z-API envia imagem em body.image.imageUrl (campo real confirmado em produção)
+        // Z-API pode enviar imageUrl=null com downloadError — usar múltiplos fallbacks
         const imageUrl =
-          body?.image?.imageUrl ||          // campo real Z-API
-          body?.image?.url ||               // fallback legado
+          body?.image?.imageUrl ||
+          body?.image?.url ||
           body?.image?.imageMessage?.url ||
           body?.downloadUrl ||
           (typeof body?.image === 'string' && body.image.startsWith('http') ? body.image : null);
 
+        // base64 direto no campo image (formato antigo Z-API)
         const base64Str =
           typeof body?.image === 'string' && !body.image.startsWith('http') ? body.image : null;
 
-        console.log('[ownerBot/fotos/wa] imageUrl:', imageUrl?.slice(0, 80), '| hasBase64:', !!base64Str, '| imageKeys:', Object.keys(body?.image || {}));
+        // thumbnailUrl: Z-API envia como data URI "data:image/jpeg;base64,..."
+        const thumbRaw    = body?.image?.thumbnailUrl || '';
+        const thumbBase64 = thumbRaw.startsWith('data:') ? thumbRaw.split(',')[1] : null;
+
+        // zaapId / messageId para download on-demand via Z-API
+        const zaapId    = body?.zaapId || body?.messageId || body?.id || null;
+        const hasError  = !!body?.image?.downloadError;
+
+        console.log('[ownerBot/fotos/wa] imageUrl:', imageUrl?.slice(0, 80),
+          '| hasBase64:', !!base64Str, '| hasThumb:', !!thumbBase64,
+          '| zaapId:', zaapId, '| downloadError:', body?.image?.downloadError || false);
 
         try {
           let buffer, ext = 'jpg', contentType = 'image/jpeg';
+          const axios = (await import('axios')).default;
 
           if (base64Str) {
             buffer = Buffer.from(base64Str, 'base64');
+
           } else if (imageUrl) {
-            const axios    = (await import('axios')).default;
             const fotoResp = await axios.get(imageUrl, { responseType: 'arraybuffer', timeout: 15000 });
             buffer      = Buffer.from(fotoResp.data);
             contentType = fotoResp.headers['content-type'] || 'image/jpeg';
             ext         = contentType.split('/')[1]?.split(';')[0] || 'jpg';
-          } else {
-            console.warn('[ownerBot/fotos/wa] sem URL/base64. body.type:', body?.type, 'body.image keys:', Object.keys(body?.image || {}));
+
+          } else if (hasError && zaapId) {
+            // Z-API download on-demand: reprocessa quando imageUrl falhou
+            const zapiBase = `https://api.z-api.io/instances/${process.env.ZAPI_INSTANCE_ID}/token/${process.env.ZAPI_TOKEN}`;
+            try {
+              const dlResp = await axios.post(
+                `${zapiBase}/download-media`,
+                { zaapId },
+                { headers: { 'Client-Token': process.env.ZAPI_CLIENT_TOKEN }, timeout: 20000 }
+              );
+              const dlUrl = dlResp.data?.url || dlResp.data?.imageUrl || dlResp.data?.mediaUrl;
+              if (dlUrl) {
+                const fotoResp = await axios.get(dlUrl, { responseType: 'arraybuffer', timeout: 20000 });
+                buffer      = Buffer.from(fotoResp.data);
+                contentType = fotoResp.headers['content-type'] || 'image/jpeg';
+                ext         = contentType.split('/')[1]?.split(';')[0] || 'jpg';
+              }
+            } catch (dlErr) {
+              console.warn('[ownerBot/fotos/wa] download on-demand falhou:', dlErr.message);
+            }
+          }
+
+          // Último recurso: thumbnail (qualidade reduzida mas funcional)
+          if (!buffer && thumbBase64) {
+            console.log('[ownerBot/fotos/wa] usando thumbnailUrl como fallback');
+            buffer = Buffer.from(thumbBase64, 'base64');
+          }
+
+          if (!buffer) {
+            console.warn('[ownerBot/fotos/wa] sem imagem. imageKeys:', Object.keys(body?.image || {}));
             return buildConfirm('⚠️ Não consegui extrair a foto. Tente enviar novamente.', [{ label: '✅ Concluir', data: 'fotos_nao' }]);
           }
 
@@ -744,13 +783,10 @@ async function handleCusto(txt, data, norm, dados, canal, ownerId) {
 
   // ── Step 4: descricao → salvar ────────────────────────
   if (step === 4) {
-    if (data === '2') data = 'pular';
     const descricao = (data === 'pular' || data === '1' || norm === 'pular') ? null : txt;
-
-    if (!(data === 'pular' || data === '1' || norm === 'pular') && !txt) {
+    if (!descricao && !(data === 'pular' || data === '1' || norm === 'pular') && !txt) {
       return buildConfirm('📝 *Observação* (opcional):\n_(Digite a observação ou clique Pular)_', [{ label: '⏭️ Pular', data: 'pular' }]);
     }
-
     return finalizarCusto({ ...dados, descricao }, canal, ownerId);
   }
 
@@ -909,9 +945,8 @@ async function handleVenda(txt, data, norm, dados, canal, ownerId) {
 
     if (vendsCad?.length) {
       const NUMS = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣'];
-      const btns = vendsCad.slice(0, 7).map((v, i) => ({ label: `${NUMS[i]} ${v.nome}`, data: `vend_${v.nome}` }));
-      btns.push({ label: '✍️ Outro', data: 'vend_outro' });
-      btns.push({ label: '⏭️ Pular', data: 'pular' });
+      const btns = vendsCad.slice(0, 8).map((v, i) => ({ label: `${NUMS[i]} ${v.nome}`, data: `vend_${v.nome}` }));
+      btns.push({ label: '✍️ Outro nome', data: 'vend_outro' });
       await upsertSession(canal, ownerId, {
         estado: 'venda',
         dados_parciais: { ...dados, step: 3, forma_pagamento: forma, vendedores_lista: vendsCad.map(v => v.nome) },
@@ -919,10 +954,7 @@ async function handleVenda(txt, data, norm, dados, canal, ownerId) {
       return buildConfirm('🧑‍💼 *Vendedor responsável:*', btns);
     }
 
-    return buildConfirm(
-      '🧑‍💼 *Nome do vendedor?*\n_(Digite o nome ou clique Pular)_',
-      [{ label: '⏭️ Pular', data: 'pular' }]
-    );
+    return txt_('🧑‍💼 *Nome do vendedor:*\n_(Digite o nome do vendedor responsável)_');
   }
 
   // ── Step 3: vendedor ──────────────────────────────────
@@ -933,7 +965,7 @@ async function handleVenda(txt, data, norm, dados, canal, ownerId) {
       if (!isNaN(idx) && idx >= 0 && idx < dados.vendedores_lista.length) {
         data = `vend_${dados.vendedores_lista[idx]}`;
       }
-      if (data === 'vend_outro' || norm === 'outro') {
+      if (data === 'vend_outro' || norm === 'outro' || norm === 'outro nome') {
         await upsertSession(canal, ownerId, { estado: 'venda', dados_parciais: { ...dados, step: '3_nome' } });
         return txt_('Digite o nome do vendedor:');
       }
@@ -942,13 +974,20 @@ async function handleVenda(txt, data, norm, dados, canal, ownerId) {
         await upsertSession(canal, ownerId, { estado: 'venda', dados_parciais: { ...dados, step: 4, nome_vendedor: nomeVend } });
         return buildConfirm('👤 *Nome do comprador?*\n_(Digite o nome ou clique Pular)_', [{ label: '⏭️ Pular', data: 'pular' }]);
       }
+      // Digitou texto diretamente (não selecionou da lista)
+      if (txt?.trim()) {
+        await upsertSession(canal, ownerId, { estado: 'venda', dados_parciais: { ...dados, step: 4, nome_vendedor: txt.trim() } });
+        return buildConfirm('👤 *Nome do comprador?*\n_(Digite o nome ou clique Pular)_', [{ label: '⏭️ Pular', data: 'pular' }]);
+      }
+      // Sem seleção válida — pedir novamente
+      const NUMS = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣'];
+      const btns = dados.vendedores_lista.slice(0, 8).map((n, i) => ({ label: `${NUMS[i]} ${n}`, data: `vend_${n}` }));
+      btns.push({ label: '✍️ Outro nome', data: 'vend_outro' });
+      return buildConfirm('⚠️ Selecione o vendedor responsável:', btns);
     }
-    // Sem lista cadastrada — fluxo normal
-    if (data === '1' || data === 'pular' || norm === 'pular') {
-      await upsertSession(canal, ownerId, { estado: 'venda', dados_parciais: { ...dados, step: 4, nome_vendedor: null } });
-    } else {
-      await upsertSession(canal, ownerId, { estado: 'venda', dados_parciais: { ...dados, step: 4, nome_vendedor: txt } });
-    }
+    // Sem lista cadastrada — vendedor obrigatório por texto
+    if (!txt?.trim()) return txt_('⚠️ Informe o nome do vendedor:');
+    await upsertSession(canal, ownerId, { estado: 'venda', dados_parciais: { ...dados, step: 4, nome_vendedor: txt.trim() } });
     return buildConfirm(
       '👤 *Nome do comprador?*\n_(Digite o nome ou clique Pular)_',
       [{ label: '⏭️ Pular', data: 'pular' }]
@@ -1083,8 +1122,8 @@ async function consultarLeads() {
   const { data: leads } = await supabase
     .from('leads')
     .select('nome, contato, canal, status_funil, atendimento_humano, score_qualificacao, veiculos:veiculo_interesse_id(modelo, ano)')
-    .gte('created_at', desde)
-    .order('created_at', { ascending: false });
+    .gte('ultima_interacao', desde)
+    .order('ultima_interacao', { ascending: false });
 
   if (!leads?.length) return txt_('👥 Nenhum lead nas últimas 24h.');
 
@@ -1093,9 +1132,9 @@ async function consultarLeads() {
     const humano  = l.atendimento_humano ? ' 🤝' : '';
     const score   = l.score_qualificacao ? ` ⭐${l.score_qualificacao}` : '';
     const canal   = l.canal === 'whatsapp' ? 'WA' : 'IG';
-    const fone    = l.contato ? ` · ${l.contato}` : '';
-    return `• ${l.nome || 'Sem nome'}${fone} [${canal}${humano}${score}] — ${veiculo}`;
-  }).join('\n');
+    const fone    = l.contato || '—';
+    return `• *${l.nome || 'Sem nome'}*\n  📞 ${fone} [${canal}${humano}${score}] — ${veiculo}`;
+  }).join('\n\n');
 
   return txt_(`👥 *Leads nas últimas 24h* (${leads.length})\n\n${lista}`);
 }

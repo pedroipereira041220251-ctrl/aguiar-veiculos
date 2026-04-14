@@ -42,6 +42,13 @@ export default function VeiculoDetailPage() {
   const [reservando, setReservando]         = useState(false);
   const [editandoDoc, setEditandoDoc]       = useState(false);
   const [salvandoDoc, setSalvandoDoc]       = useState(false);
+  const [vendedoresCad, setVendedoresCad]   = useState<string[]>([]);
+
+  useEffect(() => {
+    api.vendedores.cadastro.listar()
+      .then(vs => setVendedoresCad(vs.map(v => v.nome)))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     api.veiculos.buscar(id)
@@ -620,12 +627,25 @@ export default function VeiculoDetailPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-text-muted mb-1">Vendedor responsável</label>
-                <input
-                  value={vendaForm.nome_vendedor}
-                  onChange={e => setVendaForm(p => ({ ...p, nome_vendedor: e.target.value }))}
-                  placeholder="Nome do vendedor (opcional)"
-                  className={INPUT}
-                />
+                {vendedoresCad.length > 0 ? (
+                  <select
+                    value={vendaForm.nome_vendedor}
+                    onChange={e => setVendaForm(p => ({ ...p, nome_vendedor: e.target.value }))}
+                    className={INPUT}
+                  >
+                    <option value="">Selecionar vendedor</option>
+                    {vendedoresCad.map(n => (
+                      <option key={n} value={n}>{n}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    value={vendaForm.nome_vendedor}
+                    onChange={e => setVendaForm(p => ({ ...p, nome_vendedor: e.target.value }))}
+                    placeholder="Nome do vendedor"
+                    className={INPUT}
+                  />
+                )}
               </div>
             </div>
             <button

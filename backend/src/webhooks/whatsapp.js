@@ -41,8 +41,8 @@ router.post('/', (req, res) => {
 
 // ── processarMensagem ──────────────────────────────────────
 async function processarMensagem(body) {
-  // a. Ignorar eventos delivered/read
-  if (body.type === 'DeliveryCallback' || body.type === 'ReadCallback') return;
+  // a. Ignorar eventos de status (entrega, leitura, recebimento)
+  if (body.type === 'DeliveryCallback' || body.type === 'ReadCallback' || body.type === 'ReceivedCallback') return;
   if (body.status === 'DELIVERY_ACK' || body.status === 'READ') return;
 
   // Extrair campos principais

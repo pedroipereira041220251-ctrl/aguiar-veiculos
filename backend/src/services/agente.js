@@ -207,8 +207,10 @@ Tom e estilo:
 
 Regras importantes:
 - NUNCA invente preços, disponibilidade ou condições. Use sempre a tool consultar_estoque antes de falar sobre veículos.
-- Se consultar_estoque retornar disponiveis[] vazio com alternativas[] da mesma faixa de preço/ano, apresente-as naturalmente: "não tenho SW4 disponível agora, mas na mesma faixa de preço tenho...". Se as alternativas forem de categoria muito diferente, seja honesta: "não temos SW4 no momento e nem algo parecido em estoque — posso te avisar quando chegar algo assim, ou te mostro o que temos disponível?".
-- Se não houver nenhuma alternativa, informe com simpatia e pergunte se o cliente toparia algo diferente ou quer entrar em lista de espera.
+- Os preços retornados pela tool são os únicos corretos — exiba-os exatamente como recebidos, sem arredondar, abreviar ou interpretar. "R$ 700.000" nunca vira "70 mil".
+- Liste TODOS os veículos retornados pela tool, sem omitir nenhum.
+- Se consultar_estoque retornar disponiveis[] vazio, informe que não temos esse veículo e pergunte sobre preferências (faixa de preço, ano, cor) antes de qualquer sugestão. Só faça uma nova consulta ao estoque depois de coletar ao menos a faixa de preço do cliente.
+- Se após coletar preferências ainda não houver nada, pergunte se o cliente quer ser avisado quando chegar.
 - NUNCA diga que é bot, IA ou assistente virtual.
 - NUNCA presuma que o cliente escolheu um veículo. Apresente as opções e espere confirmação explícita antes de salvar veiculo_interesse_id ou avançar no funil. Quando mostrar mais de uma opção, pergunte qual chamou mais atenção.
 - Se o cliente pedir para falar com um humano, use a tool handoff com motivo "pedido_cliente".
@@ -461,43 +463,17 @@ async function executarTool(nome, args, lead, contato, canal) {
           id:          v.id,
           placa:       v.placa,
           descricao:   `${v.marca} ${v.modelo} ${v.ano} · ${v.cor} · ${v.km?.toLocaleString('pt-BR')} km`,
-          preco_venda: v.preco_venda,
+          preco_venda: `R$ ${Number(v.preco_venda || 0).toLocaleString('pt-BR')}`,
         });
 
         if (data?.length) {
           return { disponiveis: data.map(formatar) };
         }
 
-        // Nenhum resultado — tentar alternativas mantendo faixa de preço/ano (sem o filtro de busca)
-        let queryAlt = supabase
-          .from('vw_veiculos_com_financeiro')
-          .select('id, placa, marca, modelo, ano, cor, km, preco_venda')
-          .eq('status', 'disponivel')
-          .order('preco_venda', { ascending: true })
-          .limit(5);
-
-        if (args.preco_max) queryAlt = queryAlt.lte('preco_venda', args.preco_max);
-        if (args.ano_min)   queryAlt = queryAlt.gte('ano', args.ano_min);
-
-        const { data: altFaixa } = await queryAlt;
-
-        // Se ainda vazio, abrir para todo o estoque
-        let alternativas = altFaixa;
-        if (!altFaixa?.length) {
-          const { data: altGeral } = await supabase
-            .from('vw_veiculos_com_financeiro')
-            .select('id, placa, marca, modelo, ano, cor, km, preco_venda')
-            .eq('status', 'disponivel')
-            .order('preco_venda', { ascending: true })
-            .limit(5);
-          alternativas = altGeral;
-        }
-
+        // Nenhum resultado — retornar vazio para o agente perguntar preferências antes de sugerir
         return {
           disponiveis: [],
-          mesma_faixa: !!(altFaixa?.length), // indica se alternativas são da mesma faixa de preço/ano
-          mensagem: 'Nenhum veículo encontrado com exatamente esses critérios.',
-          alternativas: alternativas?.map(formatar) || [],
+          mensagem: 'Nenhum veículo encontrado com esses critérios.',
         };
       }
 

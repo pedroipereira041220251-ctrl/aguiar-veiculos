@@ -154,7 +154,7 @@ async function processarComIA({ contato, canal, mensagens, body, lead_id, imageU
 
   // 6. Chamar GPT-4o com tools
   console.log('[agente] chamando GPT-4o... modelo:', process.env.OPENAI_MODEL || 'gpt-4o', '| key:', process.env.OPENAI_API_KEY ? 'ok' : 'AUSENTE');
-  const resposta = await chamarGPT(mensagensGPT, lead, contato, canal);
+  const resposta = await chamarGPT(mensagensGPT, lead, contato, canal, buildContextoLead(lead));
   console.log('[agente] resposta GPT:', resposta?.texto?.slice(0, 80) || 'null');
   if (!resposta) return;
 
@@ -338,7 +338,19 @@ const TOOLS = [
 // LOOP GPT-4o COM TOOL CALLS
 // ─────────────────────────────────────────────────────────
 
-async function chamarGPT(mensagens, lead, contato, canal) {
+function buildContextoLead(lead) {
+  if (!lead) return '';
+  const linhas = [];
+  if (lead.nome)                  linhas.push(`Nome: ${lead.nome}`);
+  if (lead.forma_pagamento)       linhas.push(`Forma de pagamento: ${lead.forma_pagamento}`);
+  if (lead.prazo_compra)          linhas.push(`Prazo de compra: ${lead.prazo_compra}`);
+  if (lead.capacidade_financeira) linhas.push(`Capacidade financeira: ${lead.capacidade_financeira}`);
+  if (lead.score_qualificacao)    linhas.push(`Score atual: ${lead.score_qualificacao}`);
+  if (!linhas.length) return '';
+  return `\n\nDados já coletados deste cliente (não pergunte novamente):\n${linhas.join('\n')}`;
+}
+
+async function chamarGPT(mensagens, lead, contato, canal, contextoLead = '') {
   const MAX_ROUNDS = 5; // evitar loop infinito de tool calls
   let msgs = [...mensagens];
   let handoffPayload = null;
@@ -347,7 +359,7 @@ async function chamarGPT(mensagens, lead, contato, canal) {
   for (let round = 0; round < MAX_ROUNDS; round++) {
     const completion = await openai.chat.completions.create({
       model:       process.env.OPENAI_MODEL || 'gpt-4o',
-      messages:    [{ role: 'system', content: SYSTEM_PROMPT }, ...msgs],
+      messages:    [{ role: 'system', content: SYSTEM_PROMPT + contextoLead }, ...msgs],
       tools:       TOOLS,
       tool_choice: 'auto',
       temperature: 0.7,
@@ -417,7 +429,12 @@ async function executarTool(nome, args, lead, contato, canal) {
           .order('preco_venda', { ascending: true })
           .limit(10);
 
-        if (args.busca)     query = query.or(`marca.ilike.%${args.busca}%,modelo.ilike.%${args.busca}%`);
+        if (args.busca) {
+          // Cada palavra é buscada em marca E modelo (ex: "Honda Civic" → bate "Honda" em marca ou "Civic" em modelo)
+          const palavras = args.busca.trim().split(/\s+/);
+          const filtros = palavras.flatMap(p => [`marca.ilike.%${p}%`, `modelo.ilike.%${p}%`]);
+          query = query.or(filtros.join(','));
+        }
         if (args.preco_max) query = query.lte('preco_venda', args.preco_max);
         if (args.ano_min)   query = query.gte('ano', args.ano_min);
 

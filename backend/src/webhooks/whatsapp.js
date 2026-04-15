@@ -41,11 +41,9 @@ router.post('/', (req, res) => {
 
 // ── processarMensagem ──────────────────────────────────────
 async function processarMensagem(body) {
-  // LOG TEMPORÁRIO — ver payload completo
-  console.log('[webhook/raw]', JSON.stringify(body));
-
-  // a. Ignorar eventos de status (entrega, leitura, recebimento)
-  if (body.type === 'DeliveryCallback' || body.type === 'ReadCallback' || body.type === 'ReceivedCallback') return;
+  // a. Ignorar eventos de status (entrega e leitura — ReceivedCallback é mensagem real no Z-API)
+  if (body.type === 'DeliveryCallback' || body.type === 'ReadCallback') return;
+  if (body.status === 'DELIVERY_ACK' || body.status === 'READ') return;
   if (body.status === 'DELIVERY_ACK' || body.status === 'READ') return;
 
   // Extrair campos principais
@@ -217,9 +215,7 @@ function extrairTexto(body) {
 }
 
 function extrairAudioUrl(body) {
-  // Z-API: áudios PTT e AudioMessage
-  const tipo = (body.type || '').toLowerCase();
-  if (!tipo.includes('audio') && !tipo.includes('ptt')) return null;
+  // Z-API envia áudio com type='ReceivedCallback' mas com campo 'audio' no body
   return body.audio?.audioUrl || body.audio?.url || null;
 }
 

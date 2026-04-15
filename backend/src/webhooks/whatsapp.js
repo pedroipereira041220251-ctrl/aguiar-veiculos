@@ -41,8 +41,8 @@ router.post('/', (req, res) => {
 
 // ── processarMensagem ──────────────────────────────────────
 async function processarMensagem(body) {
-  // LOG TEMPORÁRIO — ver payload bruto de todos os eventos Z-API
-  console.log('[webhook/raw]', JSON.stringify({ type: body.type, status: body.status, fromMe: body.fromMe, phone: body.phone, keys: Object.keys(body) }));
+  // LOG TEMPORÁRIO — ver payload completo
+  console.log('[webhook/raw]', JSON.stringify(body));
 
   // a. Ignorar eventos de status (entrega, leitura, recebimento)
   if (body.type === 'DeliveryCallback' || body.type === 'ReadCallback' || body.type === 'ReceivedCallback') return;

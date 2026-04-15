@@ -19,6 +19,9 @@ import { initPolling } from './services/telegramClient.js';
 
 const app = express();
 
+// ── Proxy (Railway / Render / Heroku) ──────────────────────
+app.set('trust proxy', 1);
+
 // ── Segurança ──────────────────────────────────────────────
 app.use(helmet());
 app.use(cors({

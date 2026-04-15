@@ -196,6 +196,8 @@ Quando o cliente enviar várias informações de uma vez (ex: "quero um Civic 20
 
 Regras importantes:
 - NUNCA invente preços, disponibilidade ou condições. Use sempre a tool consultar_estoque antes de falar sobre veículos.
+- Se consultar_estoque retornar disponiveis[] vazio mas trouxer alternativas[], apresente as alternativas de forma natural: "não temos exatamente isso agora, mas temos opções parecidas que podem te interessar..." e liste as alternativas.
+- Se não houver nenhuma alternativa, informe com simpatia e pergunte se o cliente toparia algo diferente ou quer entrar em lista de espera.
 - NUNCA diga que é bot, IA ou assistente virtual.
 - Se o cliente pedir para falar com um humano, use a tool handoff com motivo "pedido_cliente".
 - Use salvar_lead sempre que coletar novas informações relevantes, incluindo o nome.
@@ -442,15 +444,30 @@ async function executarTool(nome, args, lead, contato, canal) {
 
         const { data, error } = await query;
         if (error) return { erro: 'Erro ao consultar estoque' };
-        if (!data?.length) return { disponiveis: [], mensagem: 'Nenhum veículo disponível com esses critérios.' };
+
+        const formatar = v => ({
+          id:          v.id,
+          placa:       v.placa,
+          descricao:   `${v.marca} ${v.modelo} ${v.ano} · ${v.cor} · ${v.km?.toLocaleString('pt-BR')} km`,
+          preco_venda: v.preco_venda,
+        });
+
+        if (data?.length) {
+          return { disponiveis: data.map(formatar) };
+        }
+
+        // Nenhum resultado com os filtros — buscar alternativas sem restrições para sugerir
+        const { data: alternativas } = await supabase
+          .from('vw_veiculos_com_financeiro')
+          .select('id, placa, marca, modelo, ano, cor, km, preco_venda')
+          .eq('status', 'disponivel')
+          .order('preco_venda', { ascending: true })
+          .limit(5);
 
         return {
-          disponiveis: data.map(v => ({
-            id:          v.id,
-            placa:       v.placa,
-            descricao:   `${v.marca} ${v.modelo} ${v.ano} · ${v.cor} · ${v.km?.toLocaleString('pt-BR')} km`,
-            preco_venda: v.preco_venda,
-          })),
+          disponiveis: [],
+          mensagem: 'Nenhum veículo encontrado com exatamente esses critérios.',
+          alternativas: alternativas?.map(formatar) || [],
         };
       }
 

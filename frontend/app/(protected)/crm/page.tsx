@@ -293,6 +293,9 @@ function LeadCardContent({ lead, onAssumir, assumindo, onAbrir, onMover, onToggl
           <p className="text-sm font-semibold text-text-primary leading-tight truncate">
             {lead.nome || lead.contato}
           </p>
+          {lead.nome && (
+            <p className="text-xs text-text-muted leading-tight truncate">{lead.contato}</p>
+          )}
           <p className="text-xs text-text-muted mt-0.5 capitalize">{lead.canal}</p>
         </div>
         <button

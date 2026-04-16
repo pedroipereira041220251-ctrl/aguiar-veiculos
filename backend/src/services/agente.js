@@ -30,6 +30,10 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const debounceMap = new Map();
 const DEBOUNCE_MS = 3000;
 
+// ── Veículos exibidos por lead (para extração de veiculo_interesse_id) ─
+// Map<leadId, [{id, descricao, preco_venda}]>
+const lastVeiculosMap = new Map();
+
 // ─────────────────────────────────────────────────────────
 // ENTRY POINT
 // ─────────────────────────────────────────────────────────
@@ -146,34 +150,39 @@ async function processarComIA({ contato, canal, mensagens, body, lead_id, imageU
   const textoConsolidado = mensagens.filter(Boolean).join('\n');
   if (!textoConsolidado) return;
 
-  // 5. Adicionar mensagem do usuário ao histórico
+  // 5. Extração server-side: salva dados da mensagem antes do GPT principal
+  await extrairEhSalvarDados(textoConsolidado, lead);
+
+  // 5b. Re-buscar lead com campos recém-extraídos para contexto atualizado
+  const { data: leadAtualizado } = await supabase.from('leads').select('*').eq('id', lead.id).single();
+  const leadParaGPT = leadAtualizado || lead;
+
+  // 6. Adicionar mensagem do usuário ao histórico
   const mensagensGPT = [
     ...historicoParaGPT(historico),
     { role: 'user', content: textoConsolidado },
   ];
 
-  // 6. Chamar GPT-4o com tools
+  // 7. Chamar GPT-4o com contexto atualizado
   console.log('[agente] chamando GPT-4o... modelo:', process.env.OPENAI_MODEL || 'gpt-4o', '| key:', process.env.OPENAI_API_KEY ? 'ok' : 'AUSENTE');
-  const resposta = await chamarGPT(mensagensGPT, lead, contato, canal, buildContextoLead(lead));
+  const resposta = await chamarGPT(mensagensGPT, leadParaGPT, contato, canal, buildContextoLead(leadParaGPT));
   console.log('[agente] resposta GPT:', resposta?.texto?.slice(0, 80) || 'null');
   if (!resposta) return;
 
-  // 7. Enviar resposta ao cliente
+  // 8. Enviar resposta ao cliente
   await enviarParaCliente(contato, canal, resposta.texto);
 
-  // 8. Salvar histórico
+  // 9. Salvar histórico
   await salvarMensagens(lead.id, canal, [
     { role: 'user',      content: textoConsolidado, tipo: 'text' },
     { role: 'assistant', content: resposta.texto,   tipo: 'text' },
   ]);
 
-  // 9. Verificar handoff e auto-check de score 4 como fallback de segurança
+  // 10. Verificar handoff e auto-check de score 4 como fallback de segurança
   if (resposta.handoff) {
     await executarHandoff(lead.id, resposta.handoff.motivo, resposta.handoff.resumo, contato, canal);
   } else {
-    // Fallback: se GPT coletou todos os dados mas esqueceu de chamar notificar_score4,
-    // o servidor verifica automaticamente e dispara a notificação.
-    await autoCheckScore4(lead.id, lead.score_qualificacao ?? 0);
+    await autoCheckScore4(lead.id, leadParaGPT.score_qualificacao ?? 0);
   }
 }
 
@@ -399,6 +408,7 @@ function buildContextoLead(lead) {
   if (!lead) return '';
   const linhas = [];
   if (lead.nome)                  linhas.push(`Nome: ${lead.nome}`);
+  if (lead.veiculo_interesse_id)  linhas.push(`Veículo de interesse já confirmado (ID: ${lead.veiculo_interesse_id}) — não pergunte novamente qual veículo ele quer.`);
   if (lead.forma_pagamento)       linhas.push(`Forma de pagamento: ${lead.forma_pagamento}`);
   if (lead.prazo_compra)          linhas.push(`Prazo de compra: ${lead.prazo_compra}`);
   if (lead.capacidade_financeira) linhas.push(`Capacidade financeira: ${lead.capacidade_financeira}`);
@@ -502,6 +512,8 @@ async function executarTool(nome, args, lead, contato, canal) {
         });
 
         if (data?.length) {
+          // Guardar veículos exibidos para uso na extração da próxima mensagem
+          if (lead?.id) lastVeiculosMap.set(lead.id, data.map(formatar));
           return { disponiveis: data.map(formatar) };
         }
 
@@ -605,6 +617,96 @@ async function executarTool(nome, args, lead, contato, canal) {
     console.error(`[agente/tool:${nome}]`, err);
     return { erro: 'Erro ao executar operação' };
   }
+}
+
+// ─────────────────────────────────────────────────────────
+// EXTRAÇÃO SERVER-SIDE — independente do GPT principal
+// ─────────────────────────────────────────────────────────
+// Usa gpt-4o-mini com tool_choice forçado para extrair dados
+// estruturados de cada mensagem do cliente e salvar no banco.
+// Roda ANTES do GPT principal para garantir que o contexto
+// passado ao GPT já reflete os dados da mensagem atual.
+
+async function extrairEhSalvarDados(textoCliente, lead) {
+  if (!textoCliente?.trim() || !lead?.id) return;
+
+  const veiculosExibidos = lastVeiculosMap.get(lead.id) || [];
+  const veiculosCtx = veiculosExibidos.length
+    ? `\nVeículos já apresentados ao cliente (use o id para veiculo_confirmado_id se o cliente confirmar interesse):\n` +
+      veiculosExibidos.map(v => `id:${v.id} | ${v.descricao} | ${v.preco_venda}`).join('\n')
+    : '';
+
+  let completion;
+  try {
+    completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: `Você é um extrator de dados de conversas de vendas de carros. Analise a mensagem do cliente e extraia SOMENTE o que foi mencionado explicitamente NESTA mensagem. Use null para campos não mencionados.${veiculosCtx}`,
+        },
+        { role: 'user', content: textoCliente },
+      ],
+      tools: [{
+        type: 'function',
+        function: {
+          name: 'registrar_dados_cliente',
+          description: 'Registra dados extraídos da mensagem',
+          parameters: {
+            type: 'object',
+            properties: {
+              nome: {
+                type: 'string',
+                description: 'Nome do cliente se mencionou o próprio nome. null se não mencionou.',
+              },
+              forma_pagamento: {
+                type: 'string',
+                enum: ['financiamento', 'à vista'],
+                description: 'Forma de pagamento se mencionada. null se não mencionou.',
+              },
+              prazo_compra: {
+                type: 'string',
+                description: 'Prazo para comprar (ex: "essa semana", "fim do mês", "30 dias", "imediato"). null se não mencionou.',
+              },
+              capacidade_financeira: {
+                type: 'string',
+                enum: ['carta_aprovada', 'a_vista_confirmado', 'sem_informacao'],
+                description: 'carta_aprovada: já tem carta de crédito aprovada. a_vista_confirmado: confirmou que já tem o valor disponível. sem_informacao: disse que ainda não tem ou está buscando. null se não mencionou.',
+              },
+              veiculo_confirmado_id: {
+                type: 'string',
+                description: 'UUID do veículo confirmado pelo cliente (da lista acima). Só preencha se o cliente sinalizou interesse claro em UM veículo específico da lista (ex: "esse", "o de 54 mil", "certinho", "gostei desse"). null caso contrário.',
+              },
+            },
+          },
+        },
+      }],
+      tool_choice: { type: 'function', function: { name: 'registrar_dados_cliente' } },
+      temperature: 0,
+    });
+  } catch (err) {
+    console.error('[agente/extração] erro na chamada GPT-mini:', err.message);
+    return;
+  }
+
+  const tc = completion.choices[0]?.message?.tool_calls?.[0];
+  if (!tc) return;
+
+  let dados;
+  try { dados = JSON.parse(tc.function.arguments); } catch { return; }
+
+  // Só salvar campos não-nulos e que não estão já preenchidos no lead
+  const payload = {};
+  if (dados.nome                  && !lead.nome)                  payload.nome                  = dados.nome;
+  if (dados.forma_pagamento       && !lead.forma_pagamento)       payload.forma_pagamento       = dados.forma_pagamento;
+  if (dados.prazo_compra          && !lead.prazo_compra)          payload.prazo_compra          = dados.prazo_compra;
+  if (dados.capacidade_financeira && !lead.capacidade_financeira) payload.capacidade_financeira = dados.capacidade_financeira;
+  if (dados.veiculo_confirmado_id && !lead.veiculo_interesse_id)  payload.veiculo_interesse_id  = dados.veiculo_confirmado_id;
+
+  if (!Object.keys(payload).length) return;
+
+  await supabase.from('leads').update(payload).eq('id', lead.id);
+  console.log('[agente/extração] dados salvos:', JSON.stringify(payload));
 }
 
 // ─────────────────────────────────────────────────────────

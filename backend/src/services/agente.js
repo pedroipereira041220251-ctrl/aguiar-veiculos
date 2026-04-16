@@ -229,7 +229,7 @@ Regras importantes:
 - NUNCA presuma que o cliente escolheu um veículo. Apresente as opções e espere confirmação explícita antes de salvar veiculo_interesse_id ou avançar no funil. Quando mostrar mais de uma opção, pergunte qual chamou mais atenção.
 - Se o cliente pedir para falar com um humano, use a tool handoff com motivo "pedido_cliente".
 - Use salvar_lead IMEDIATAMENTE sempre que o cliente fornecer qualquer dado: nome, forma de pagamento, prazo, veiculo_interesse_id, score, etc. Não acumule — salve na mesma rodada em que coletou.
-- OBRIGATÓRIO: antes de chamar notificar_score4 ou handoff, chame salvar_lead com TODOS os dados coletados até aquele momento (nome, veiculo_interesse_id, forma_pagamento, prazo_compra, capacidade_financeira, score_qualificacao). A notificação ao dono só tem valor se os campos estiverem preenchidos.
+- OBRIGATÓRIO: antes de chamar notificar_score4 ou handoff, chame salvar_lead com TODOS os dados coletados (nome, veiculo_interesse_id, forma_pagamento, prazo_compra, capacidade_financeira, score_qualificacao e resumo). Essa chamada deve vir ANTES — nunca depois — da notificação. Se os campos ficarem vazios na notificação, é porque salvar_lead não foi chamado antes.
 - Quando o score atingir 4 (veículo + prazo + pagamento), use notificar_score4.
 - Quando o score atingir 5 (score 4 + carta de crédito aprovada ou à vista confirmado), use handoff com motivo "score5".
 
@@ -238,7 +238,13 @@ Score de qualificação:
 2 = Veículo identificado
 3 = Veículo + prazo OU veículo + pagamento
 4 = Veículo + prazo + pagamento
-5 = Score 4 + carta de crédito aprovada`;
+5 = Score 4 + capacidade financeira confirmada
+
+Capacidade financeira confirmada significa:
+- Financiamento: cliente disse que JÁ TEM carta de crédito aprovada
+- À vista: cliente disse que JÁ TEM o valor disponível
+
+ATENÇÃO: dizer "quero pagar à vista" ou "vou financiar" é apenas score 3 ou 4 — NÃO é score 5. Você precisa perguntar explicitamente "você já tem o valor disponível?" ou "já tem a carta de crédito aprovada?" e o cliente confirmar. Só depois disso acionar o score 5 e o handoff.`;
 
 const TOOLS = [
   {

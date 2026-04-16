@@ -167,11 +167,13 @@ async function processarComIA({ contato, canal, mensagens, body, lead_id, imageU
     { role: 'assistant', content: resposta.texto,   tipo: 'text' },
   ]);
 
-  // 9. Verificar score e disparar ações
+  // 9. Verificar handoff e auto-check de score 4 como fallback de segurança
   if (resposta.handoff) {
     await executarHandoff(lead.id, resposta.handoff.motivo, resposta.handoff.resumo, contato, canal);
-  } else if (resposta.score4) {
-    await notificarScore4(lead.id, resposta.score4.resumo);
+  } else {
+    // Fallback: se GPT coletou todos os dados mas esqueceu de chamar notificar_score4,
+    // o servidor verifica automaticamente e dispara a notificação.
+    await autoCheckScore4(lead.id, lead.score_qualificacao ?? 0);
   }
 }
 
@@ -235,10 +237,9 @@ Regras importantes:
 - NUNCA diga que é bot, IA ou assistente virtual.
 - NUNCA presuma que o cliente escolheu um veículo. Apresente as opções e espere confirmação explícita antes de salvar veiculo_interesse_id ou avançar no funil. Quando mostrar mais de uma opção, pergunte qual chamou mais atenção.
 - Se o cliente pedir para falar com um humano, use a tool handoff com motivo "pedido_cliente".
-- Use salvar_lead IMEDIATAMENTE sempre que o cliente fornecer qualquer dado: nome, forma de pagamento, prazo, veiculo_interesse_id, score, etc. Não acumule — salve na mesma rodada em que coletou.
-- OBRIGATÓRIO: imediatamente antes de chamar notificar_score4 ou handoff, chame salvar_lead com score_qualificacao=4 (ou 5), veiculo_interesse_id, forma_pagamento, prazo_compra e capacidade_financeira. A ordem é: 1) salvar_lead → 2) notificar_score4 ou handoff. Nunca inverta. Os campos da notificação são lidos do banco — se estiverem vazios (—), é porque salvar_lead não foi chamado antes.
-- Quando o score atingir 4 (veículo + prazo + pagamento), use notificar_score4.
-- Quando o score atingir 5 (score 4 + carta de crédito aprovada ou à vista confirmado), use handoff com motivo "score5".
+- Use salvar_lead assim que o cliente fornecer qualquer dado: nome, forma de pagamento, prazo, veiculo_interesse_id. Não acumule — salve na mesma rodada em que coletou.
+- Quando o score atingir 4 (veículo + prazo + pagamento confirmados nesta conversa), chame notificar_score4 imediatamente, incluindo veiculo_interesse_id, forma_pagamento, prazo_compra e capacidade_financeira nos parâmetros.
+- Quando o score atingir 5 (score 4 + capacidade financeira confirmada), use handoff com motivo "score5", incluindo todos os campos coletados nos parâmetros.
 
 Score de qualificação:
 1 = Apenas curiosidade, sem informações
@@ -410,7 +411,6 @@ async function chamarGPT(mensagens, lead, contato, canal, contextoLead = '') {
   const MAX_ROUNDS = 5; // evitar loop infinito de tool calls
   let msgs = [...mensagens];
   let handoffPayload = null;
-  let score4Payload  = null;
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
     const completion = await openai.chat.completions.create({
@@ -427,7 +427,7 @@ async function chamarGPT(mensagens, lead, contato, canal, contextoLead = '') {
 
     // Sem tool calls → resposta final ao cliente
     if (!msg.tool_calls?.length) {
-      return { texto: msg.content, handoff: handoffPayload, score4: score4Payload };
+      return { texto: msg.content, handoff: handoffPayload };
     }
 
     // Processar tool calls em sequência
@@ -442,12 +442,9 @@ async function chamarGPT(mensagens, lead, contato, canal, contextoLead = '') {
 
       const resultado = await executarTool(nome, args, lead, contato, canal);
 
-      // Detectar intenção de handoff e score 4 para executar APÓS enviar resposta ao cliente
+      // handoff ainda é diferido para enviar msg ao cliente antes de desativar o agente
       if (nome === 'handoff') {
         handoffPayload = { motivo: args.motivo, resumo: args.resumo };
-      }
-      if (nome === 'notificar_score4') {
-        score4Payload = { resumo: args.resumo };
       }
 
       msgs.push({
@@ -457,16 +454,14 @@ async function chamarGPT(mensagens, lead, contato, canal, contextoLead = '') {
       });
     }
 
-    // Se chegou ao fim do loop sem mensagem de texto, continuar para próximo round
     if (choice.finish_reason === 'stop') {
-      // Já processado acima — não deve chegar aqui com tool_calls
       break;
     }
   }
 
   // Fallback: extrair último texto da sequência
   const ultimo = msgs.filter(m => m.role === 'assistant' && m.content).pop();
-  return { texto: ultimo?.content || 'Em breve retornaremos. 😊', handoff: handoffPayload, score4: score4Payload };
+  return { texto: ultimo?.content || 'Em breve retornaremos. 😊', handoff: handoffPayload };
 }
 
 // ─────────────────────────────────────────────────────────
@@ -562,7 +557,7 @@ async function executarTool(nome, args, lead, contato, canal) {
         return { ok: true, agendado: true };
 
       case 'notificar_score4':
-        // Salvar dados recebidos na chamada antes de executar a notificação
+        // Salvar dados e disparar notificação imediatamente (não diferido)
         if (lead?.id) {
           const camposScore4 = { score_qualificacao: 4 };
           if (args.veiculo_interesse_id)  camposScore4.veiculo_interesse_id  = args.veiculo_interesse_id;
@@ -570,8 +565,12 @@ async function executarTool(nome, args, lead, contato, canal) {
           if (args.prazo_compra)          camposScore4.prazo_compra          = args.prazo_compra;
           if (args.capacidade_financeira) camposScore4.capacidade_financeira = args.capacidade_financeira;
           await supabase.from('leads').update(camposScore4).eq('id', lead.id);
+          // Disparar notificação agora — não esperar fim do loop GPT
+          notificarScore4(lead.id, args.resumo || '').catch(err =>
+            console.error('[agente/tool:notificar_score4] notify error:', err.message)
+          );
         }
-        return { ok: true, agendado: true };
+        return { ok: true, notificado: true };
 
       case 'verificar_horario': {
         const dentro = await verificarHorario();
@@ -607,12 +606,42 @@ async function executarTool(nome, args, lead, contato, canal) {
 }
 
 // ─────────────────────────────────────────────────────────
+// AUTO-CHECK SCORE 4 — fallback server-side
+// ─────────────────────────────────────────────────────────
+// Garante que o dono é notificado mesmo se GPT não chamar notificar_score4
+
+async function autoCheckScore4(leadId, prevScore) {
+  if (prevScore >= 4) return; // já notificado antes — não repetir
+
+  const { data: leadAtual } = await supabase
+    .from('leads')
+    .select('score_qualificacao, veiculo_interesse_id, prazo_compra, forma_pagamento, capacidade_financeira')
+    .eq('id', leadId)
+    .single();
+
+  if (!leadAtual) return;
+  if ((leadAtual.score_qualificacao ?? 0) >= 4) return; // GPT já salvou score 4 — notificação já foi
+
+  const temVeiculo   = !!leadAtual.veiculo_interesse_id;
+  const temPrazo     = !!leadAtual.prazo_compra;
+  const temPagamento = !!leadAtual.forma_pagamento;
+
+  if (temVeiculo && temPrazo && temPagamento) {
+    console.log('[agente] autoCheckScore4: critérios atingidos — disparando notificação');
+    await supabase.from('leads').update({ score_qualificacao: 4 }).eq('id', leadId);
+    await notificarScore4(leadId, 'Score 4 atingido (verificação automática do servidor)').catch(err =>
+      console.error('[agente/autoCheckScore4]', err.message)
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────
 // HANDOFF — executa após resposta enviada ao cliente
 // ─────────────────────────────────────────────────────────
 
 async function executarHandoff(leadId, motivo, resumo, contato, canal) {
   // Mensagem ao cliente antes de transferir
-  const msgCliente = 'Vou te conectar com nosso consultor agora mesmo! Em instantes ele entrará em contato. 😊';
+  const msgCliente = 'Vou te conectar com nosso consultor agora mesmo — em instantes ele entra em contato contigo.';
   await enviarParaCliente(contato, canal, msgCliente);
 
   await handoffAutomatico(leadId, motivo, resumo);

@@ -31,9 +31,11 @@ export async function handoffAutomatico(leadId, motivo, resumo) {
   }
 
   // 2. Setar atendimento_humano=true — PERMANENTE, nunca revertido
+  const update = { atendimento_humano: true, resumo_agente: resumo };
+  if (motivo === MOTIVOS.SCORE5) update.score_qualificacao = 5;
   const { error: patchError } = await supabase
     .from('leads')
-    .update({ atendimento_humano: true, resumo_agente: resumo })
+    .update(update)
     .eq('id', leadId);
 
   if (patchError) {
@@ -70,10 +72,18 @@ export async function notificarScore4(leadId, resumo) {
     return;
   }
 
+  // Garantir score 4 salvo no banco independente do agente ter chamado salvar_lead
+  await supabase
+    .from('leads')
+    .update({ score_qualificacao: 4 })
+    .eq('id', leadId)
+    .lt('score_qualificacao', 4);  // só atualiza se estiver abaixo de 4
+
   const msg = [
     '🔔 *Lead qualificado — Score 4*',
     '',
     `👤 ${lead.nome || 'Sem nome'} · ${canalLabel(lead.canal)}`,
+    `📞 Contato: ${lead.contato}`,
     `🚗 Interesse: ${veiculoLabel(lead)}`,
     `💳 Pagamento: ${lead.forma_pagamento || '—'}`,
     `💰 Capacidade: ${capacidadeLabel(lead.capacidade_financeira)}`,

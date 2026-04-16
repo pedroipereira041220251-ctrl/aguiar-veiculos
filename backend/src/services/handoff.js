@@ -72,12 +72,10 @@ export async function notificarScore4(leadId, resumo) {
     return;
   }
 
-  // Garantir score 4 salvo no banco independente do agente ter chamado salvar_lead
-  await supabase
-    .from('leads')
-    .update({ score_qualificacao: 4 })
-    .eq('id', leadId)
-    .lt('score_qualificacao', 4);  // só atualiza se estiver abaixo de 4
+  // Garantir score 4 salvo no banco (inclui null, pois null < 4 não funciona no JS)
+  if (!lead.score_qualificacao || lead.score_qualificacao < 4) {
+    await supabase.from('leads').update({ score_qualificacao: 4 }).eq('id', leadId);
+  }
 
   const msg = [
     '🔔 *Lead qualificado — Score 4*',

@@ -194,6 +194,9 @@ Colete, ao longo da conversa (sem fazer várias perguntas de uma vez — uma por
    - Se financiamento: "você já tem carta de crédito aprovada ou ainda vai buscar?" — aguarde a resposta antes de avançar
    - Se à vista: "você já tem o valor disponível?" — aguarde a resposta antes de avançar
 
+Quando o cliente mencionar apenas uma marca ou modelo, sem informar orçamento ou ano, pergunte a faixa de preço antes de consultar o estoque. Isso evita listar veículos fora do alcance do cliente. Exemplo: "Que faixa de preço você está pensando?" — só depois chame consultar_estoque com preco_max.
+Exceção: se o cliente já deu algum filtro (preço, ano, tipo), pode consultar direto.
+
 Quando o cliente enviar várias informações de uma vez (ex: "quero um Civic 2020 preto, financiamento, até 80 mil"), processe tudo na mesma resposta: consulte o estoque, salve os dados no lead e avance na conversa.
 
 Tom e estilo:
@@ -229,7 +232,7 @@ Regras importantes:
 - NUNCA presuma que o cliente escolheu um veículo. Apresente as opções e espere confirmação explícita antes de salvar veiculo_interesse_id ou avançar no funil. Quando mostrar mais de uma opção, pergunte qual chamou mais atenção.
 - Se o cliente pedir para falar com um humano, use a tool handoff com motivo "pedido_cliente".
 - Use salvar_lead IMEDIATAMENTE sempre que o cliente fornecer qualquer dado: nome, forma de pagamento, prazo, veiculo_interesse_id, score, etc. Não acumule — salve na mesma rodada em que coletou.
-- OBRIGATÓRIO: antes de chamar notificar_score4 ou handoff, chame salvar_lead com TODOS os dados coletados (nome, veiculo_interesse_id, forma_pagamento, prazo_compra, capacidade_financeira, score_qualificacao e resumo). Essa chamada deve vir ANTES — nunca depois — da notificação. Se os campos ficarem vazios na notificação, é porque salvar_lead não foi chamado antes.
+- OBRIGATÓRIO: imediatamente antes de chamar notificar_score4 ou handoff, chame salvar_lead com score_qualificacao=4 (ou 5), veiculo_interesse_id, forma_pagamento, prazo_compra e capacidade_financeira. A ordem é: 1) salvar_lead → 2) notificar_score4 ou handoff. Nunca inverta. Os campos da notificação são lidos do banco — se estiverem vazios (—), é porque salvar_lead não foi chamado antes.
 - Quando o score atingir 4 (veículo + prazo + pagamento), use notificar_score4.
 - Quando o score atingir 5 (score 4 + carta de crédito aprovada ou à vista confirmado), use handoff com motivo "score5".
 
@@ -384,8 +387,10 @@ function buildContextoLead(lead) {
   if (lead.forma_pagamento)       linhas.push(`Forma de pagamento: ${lead.forma_pagamento}`);
   if (lead.prazo_compra)          linhas.push(`Prazo de compra: ${lead.prazo_compra}`);
   if (lead.capacidade_financeira) linhas.push(`Capacidade financeira: ${lead.capacidade_financeira}`);
-  if (lead.score_qualificacao)    linhas.push(`Score atual: ${lead.score_qualificacao}`);
-  if (!linhas.length) return '';
+  const score = lead.score_qualificacao ?? 0;
+  linhas.push(`Score atual: ${score}`);
+  if (score >= 4) linhas.push(`ATENÇÃO: notificar_score4 JÁ FOI disparado. NÃO chame novamente.`);
+  if (lead.atendimento_humano)    linhas.push(`Atendimento humano: ativo — NÃO faça handoff novamente.`);
   return `\n\nDados já coletados deste cliente (não pergunte novamente):\n${linhas.join('\n')}`;
 }
 

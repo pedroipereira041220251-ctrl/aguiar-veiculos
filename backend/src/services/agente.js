@@ -194,8 +194,12 @@ Colete, ao longo da conversa (sem fazer várias perguntas de uma vez — uma por
    - Se financiamento: "você já tem carta de crédito aprovada ou ainda vai buscar?" — aguarde a resposta antes de avançar
    - Se à vista: "você já tem o valor disponível?" — aguarde a resposta antes de avançar
 
-Quando o cliente mencionar apenas uma marca ou modelo, sem informar orçamento ou ano, pergunte a faixa de preço antes de consultar o estoque. Isso evita listar veículos fora do alcance do cliente. Exemplo: "Que faixa de preço você está pensando?" — só depois chame consultar_estoque com preco_max.
-Exceção: se o cliente já deu algum filtro (preço, ano, tipo), pode consultar direto.
+Antes de consultar o estoque, avalie o que o cliente já informou. Se faltar algum filtro relevante, pergunte até 2 de uma vez (nunca mais). Critério:
+- Se não informou faixa de preço → pergunte
+- Se não informou ano preferido e está buscando modelo específico → pergunte junto com o preço
+- Se já informou preço e/ou ano → consulte direto, sem perguntar mais
+Exemplo: "Que faixa de preço você tem em mente? E prefere um ano mais recente ou não tem preferência?"
+Exceção: se o cliente já deu algum filtro (preço, ano, tipo), pode consultar direto sem perguntar.
 
 Quando o cliente enviar várias informações de uma vez (ex: "quero um Civic 2020 preto, financiamento, até 80 mil"), processe tudo na mesma resposta: consulte o estoque, salve os dados no lead e avance na conversa.
 
@@ -302,12 +306,16 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'handoff',
-      description: 'Transfere o atendimento definitivamente para o dono. Use quando: score 5 atingido, cliente pede humano, ou cliente enviou foto de entrada.',
+      description: 'Transfere o atendimento definitivamente para o dono. Use quando: score 5 atingido, cliente pede humano, ou cliente enviou foto de entrada. Inclua todos os dados coletados — eles serão salvos automaticamente.',
       parameters: {
         type: 'object',
         properties: {
-          motivo: { type: 'string', enum: ['score5', 'pedido_cliente', 'foto_entrada', 'assumido_painel'] },
-          resumo: { type: 'string', description: 'Resumo completo da conversa para o dono' },
+          motivo:                { type: 'string', enum: ['score5', 'pedido_cliente', 'foto_entrada', 'assumido_painel'] },
+          resumo:                { type: 'string', description: 'Resumo completo da conversa para o dono' },
+          veiculo_interesse_id:  { type: 'string', description: 'UUID do veículo de interesse (id retornado pelo consultar_estoque)' },
+          forma_pagamento:       { type: 'string', enum: ['financiamento', 'à vista'] },
+          prazo_compra:          { type: 'string' },
+          capacidade_financeira: { type: 'string', enum: ['carta_aprovada', 'comprovante_renda', 'a_vista_confirmado', 'sem_informacao'] },
         },
         required: ['motivo', 'resumo'],
       },
@@ -317,11 +325,15 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'notificar_score4',
-      description: 'Notifica o dono quando score 4 é atingido (veículo + prazo + pagamento). O agente CONTINUA respondendo.',
+      description: 'Notifica o dono quando score 4 é atingido (veículo + prazo + pagamento). O agente CONTINUA respondendo. Inclua todos os dados coletados — eles serão salvos automaticamente.',
       parameters: {
         type: 'object',
         properties: {
-          resumo: { type: 'string', description: 'Resumo do lead para o dono' },
+          resumo:                { type: 'string', description: 'Resumo do lead para o dono' },
+          veiculo_interesse_id:  { type: 'string', description: 'UUID do veículo de interesse (id retornado pelo consultar_estoque)' },
+          forma_pagamento:       { type: 'string', enum: ['financiamento', 'à vista'] },
+          prazo_compra:          { type: 'string' },
+          capacidade_financeira: { type: 'string', enum: ['carta_aprovada', 'comprovante_renda', 'a_vista_confirmado', 'sem_informacao'] },
         },
         required: ['resumo'],
       },
@@ -536,11 +548,29 @@ async function executarTool(nome, args, lead, contato, canal) {
       }
 
       case 'handoff':
-        // Sinalizado para executar após resposta ao cliente (ver chamarGPT)
+        // Salvar dados recebidos na chamada antes de executar o handoff
+        if (lead?.id) {
+          const camposHandoff = {};
+          if (args.veiculo_interesse_id)  camposHandoff.veiculo_interesse_id  = args.veiculo_interesse_id;
+          if (args.forma_pagamento)       camposHandoff.forma_pagamento       = args.forma_pagamento;
+          if (args.prazo_compra)          camposHandoff.prazo_compra          = args.prazo_compra;
+          if (args.capacidade_financeira) camposHandoff.capacidade_financeira = args.capacidade_financeira;
+          if (Object.keys(camposHandoff).length) {
+            await supabase.from('leads').update(camposHandoff).eq('id', lead.id);
+          }
+        }
         return { ok: true, agendado: true };
 
       case 'notificar_score4':
-        // Sinalizado para executar após resposta ao cliente (ver chamarGPT)
+        // Salvar dados recebidos na chamada antes de executar a notificação
+        if (lead?.id) {
+          const camposScore4 = { score_qualificacao: 4 };
+          if (args.veiculo_interesse_id)  camposScore4.veiculo_interesse_id  = args.veiculo_interesse_id;
+          if (args.forma_pagamento)       camposScore4.forma_pagamento       = args.forma_pagamento;
+          if (args.prazo_compra)          camposScore4.prazo_compra          = args.prazo_compra;
+          if (args.capacidade_financeira) camposScore4.capacidade_financeira = args.capacidade_financeira;
+          await supabase.from('leads').update(camposScore4).eq('id', lead.id);
+        }
         return { ok: true, agendado: true };
 
       case 'verificar_horario': {

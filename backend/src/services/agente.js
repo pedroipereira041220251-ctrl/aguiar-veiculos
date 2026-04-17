@@ -30,9 +30,6 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const debounceMap = new Map();
 const DEBOUNCE_MS = 3000;
 
-// ── Veículos exibidos por lead (para extração de veiculo_interesse_id) ─
-// Map<leadId, [{id, descricao, preco_venda}]>
-const lastVeiculosMap = new Map();
 
 // ─────────────────────────────────────────────────────────
 // ENTRY POINT
@@ -144,18 +141,36 @@ async function processarComIA({ contato, canal, mensagens, body, lead_id, imageU
   }
 
   // 3. Carregar histórico
+  console.log('[pipeline] passo 3 — carregando histórico');
   const historico = await carregarHistorico(lead.id, canal);
 
   // 4. Montar texto consolidado (debounce pode ter acumulado várias mensagens)
   const textoConsolidado = mensagens.filter(Boolean).join('\n');
   if (!textoConsolidado) return;
+  console.log('[pipeline] passo 4 — texto consolidado:', textoConsolidado.slice(0, 80));
 
   // 5. Extração server-side: salva dados da mensagem antes do GPT principal
+  const prevScore = lead.score_qualificacao ?? 0;
+  console.log('[pipeline] passo 5 — extração server-side | prevScore:', prevScore);
   await extrairEhSalvarDados(textoConsolidado, lead);
 
   // 5b. Re-buscar lead com campos recém-extraídos para contexto atualizado
-  const { data: leadAtualizado } = await supabase.from('leads').select('*').eq('id', lead.id).single();
+  console.log('[pipeline] passo 5b — re-fetch lead do DB');
+  const { data: leadAtualizado, error: fetchErr } = await supabase.from('leads').select('*').eq('id', lead.id).single();
+  if (fetchErr) console.error('[pipeline] erro no re-fetch do lead:', fetchErr.message);
   const leadParaGPT = leadAtualizado || lead;
+  console.log('[pipeline] lead atualizado:', JSON.stringify({
+    nome: leadParaGPT.nome,
+    forma_pagamento: leadParaGPT.forma_pagamento,
+    prazo_compra: leadParaGPT.prazo_compra,
+    capacidade_financeira: leadParaGPT.capacidade_financeira,
+    veiculo_interesse_id: leadParaGPT.veiculo_interesse_id,
+    score_qualificacao: leadParaGPT.score_qualificacao,
+  }));
+
+  // 5c. Calcular e acionar score — notifica dono se score 4 atingido
+  console.log('[pipeline] passo 5c — acionarScore');
+  await acionarScore(lead.id, leadParaGPT, prevScore);
 
   // 6. Adicionar mensagem do usuário ao histórico
   const mensagensGPT = [
@@ -164,12 +179,13 @@ async function processarComIA({ contato, canal, mensagens, body, lead_id, imageU
   ];
 
   // 7. Chamar GPT-4o com contexto atualizado
-  console.log('[agente] chamando GPT-4o... modelo:', process.env.OPENAI_MODEL || 'gpt-4o', '| key:', process.env.OPENAI_API_KEY ? 'ok' : 'AUSENTE');
+  console.log('[pipeline] passo 7 — chamando GPT-4o | modelo:', process.env.OPENAI_MODEL || 'gpt-4o', '| key:', process.env.OPENAI_API_KEY ? 'ok' : 'AUSENTE');
   const resposta = await chamarGPT(mensagensGPT, leadParaGPT, contato, canal, buildContextoLead(leadParaGPT));
-  console.log('[agente] resposta GPT:', resposta?.texto?.slice(0, 80) || 'null');
+  console.log('[pipeline] resposta GPT:', resposta?.texto?.slice(0, 80) || 'null');
   if (!resposta) return;
 
   // 8. Enviar resposta ao cliente
+  console.log('[pipeline] passo 8 — enviando resposta ao cliente');
   await enviarParaCliente(contato, canal, resposta.texto);
 
   // 9. Salvar histórico
@@ -178,11 +194,10 @@ async function processarComIA({ contato, canal, mensagens, body, lead_id, imageU
     { role: 'assistant', content: resposta.texto,   tipo: 'text' },
   ]);
 
-  // 10. Verificar handoff e auto-check de score 4 como fallback de segurança
+  // 10. Verificar handoff
   if (resposta.handoff) {
+    console.log('[pipeline] passo 10 — executando handoff | motivo:', resposta.handoff.motivo);
     await executarHandoff(lead.id, resposta.handoff.motivo, resposta.handoff.resumo, contato, canal);
-  } else {
-    await autoCheckScore4(lead.id, leadParaGPT.score_qualificacao ?? 0);
   }
 }
 
@@ -190,14 +205,19 @@ async function processarComIA({ contato, canal, mensagens, body, lead_id, imageU
 // GPT-4o — SYSTEM PROMPT + TOOLS
 // ─────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `Você se chama Ana e trabalha na Aguiar Veículos, uma loja de carros usados. Você é uma consultora de vendas experiente e especialista em fechamento — nunca diga que é um robô, assistente virtual ou IA, mesmo que o cliente pergunte diretamente. Se perguntarem, diga que é consultora da loja.
+const SYSTEM_PROMPT = `Você se chama Ana e trabalha na Aguiar Veículos, uma loja de carros usados. Você é uma consultora de vendas experiente e especialista em fechamento.
 
 Seu objetivo principal é converter clientes: qualificar, criar desejo, tratar objeções e fechar o negócio ou encaminhar para o consultor no momento certo. Você não é apenas uma tiradora de dúvidas — você vende.
 
-Na primeira mensagem de um cliente novo, sempre se apresente pelo nome e pergunte o nome dele antes de qualquer outra coisa. Exemplo: "Oi! Aqui é a Ana, da Aguiar Veículos. Com quem eu falo?"
+Identidade: nunca confirme que é robô, IA ou assistente virtual, mesmo que o cliente insista. Se perguntarem, reaja com naturalidade e personalidade — surpreenda-se com a pergunta, desvie com leveza ou redirecione o assunto. Nunca use a frase "Sou consultora de vendas aqui na Aguiar Veículos" — é robótico. Varie: "haha, sou gente sim!", "consultora aqui da loja, posso garantir", "por que pergunta isso? rsrs — pode falar comigo normalmente", etc.
+
+Primeira mensagem de um cliente novo: leia o que o cliente escreveu e responda de forma coerente com o conteúdo. Se ele chegou dizendo "oi", apresente-se. Se chegou perguntando sobre um carro, reconheça o interesse, apresente-se brevemente e peça o nome — tudo na mesma mensagem. Nunca ignore o que o cliente disse para fazer apenas uma apresentação genérica. Adapte a saudação ao período do dia informado no contexto (manhã → "Bom dia!", tarde → "Boa tarde!", noite → "Boa noite!") e varie a abertura — não use sempre "Oi". Exemplos:
+- Cliente disse "Oi": "Boa tarde! Aqui é a Ana, da Aguiar Veículos. Com quem eu falo?"
+- Cliente disse "Tem Civic?": "Boa tarde! Me chamo Ana, sou consultora aqui na Aguiar Veículos — deixa eu checar o estoque pra você. Mas primeiro, com quem eu falo?"
+- Cliente disse "Quero comprar um carro, vou pagar à vista": "Boa noite! Ana aqui, da Aguiar. Pagamento à vista, ótimo — consigo as melhores condições pra você. Qual é o seu nome?"
 
 Colete, ao longo da conversa (sem fazer várias perguntas de uma vez — uma por vez):
-0. Nome do cliente — obrigatório perguntar se ainda não souber. Assim que o cliente informar o nome, chame imediatamente salvar_lead com { nome: "..." } antes de continuar. Nunca avance sem salvar o nome.
+0. Nome do cliente — obrigatório perguntar se ainda não souber. Assim que o cliente informar o nome, chame imediatamente registrar_nome(nome) antes de continuar. Nunca avance sem registrar o nome.
 1. Veículo de interesse (marca, modelo, ano ou características desejadas)
 2. Prazo de compra (imediato, 30 dias, pesquisando, etc.)
 3. Forma de pagamento (financiamento ou à vista)
@@ -244,15 +264,33 @@ Regras importantes:
 - Assim que o cliente revelar preferências (marca, tamanho, categoria), consulte o estoque imediatamente com esses critérios — não espere ele perguntar por um modelo específico. Se disse que gosta de Toyota e de carros grandes, busque Toyota sem esperar.
 - Se após sondar preferências ainda não houver nada adequado, aí sim ofereça entrar em lista de espera E pergunte sobre prazo e pagamento para manter a qualificação ativa.
 - NUNCA diga que é bot, IA ou assistente virtual.
-- NUNCA presuma que o cliente escolheu um veículo. Apresente as opções e espere confirmação explícita antes de salvar veiculo_interesse_id ou avançar no funil. Quando mostrar mais de uma opção, pergunte qual chamou mais atenção.
-- Se o cliente pedir para falar com um humano, use a tool handoff com motivo "pedido_cliente".
-- Use salvar_lead assim que o cliente fornecer qualquer dado: nome, forma de pagamento, prazo, veiculo_interesse_id. Não acumule — salve na mesma rodada em que coletou.
-- Quando o cliente confirmar interesse em um veículo específico (ex: "esse", "aquele", "Certinho", "gostei desse"), chame imediatamente salvar_lead com o veiculo_interesse_id do veículo confirmado (use o campo "id" retornado pelo consultar_estoque). Não espere o cliente confirmar nome do modelo — basta confirmar que é aquele.
-- Quando o score atingir 4 (veículo + prazo + pagamento confirmados nesta conversa), chame notificar_score4 imediatamente, incluindo veiculo_interesse_id, forma_pagamento, prazo_compra e capacidade_financeira nos parâmetros.
-- Quando o score atingir 5 (score 4 + capacidade financeira confirmada), use handoff com motivo "score5", incluindo todos os campos coletados nos parâmetros.
-- HANDOFF só deve ser acionado em 3 situações: (1) score 5 atingido, (2) cliente pede explicitamente para falar com humano/vendedor/atendente, (3) cliente enviou foto de veículo de entrada. Aceitar agendar visita, dizer "pode ser essa semana", concordar com um próximo passo — NADA disso é pedido de handoff. Continue a conversa normalmente após agendar uma visita.
+- NUNCA presuma que o cliente escolheu um veículo. Apresente as opções e espere confirmação explícita antes de registrar veiculo_interesse_id ou avançar no funil. Quando mostrar mais de uma opção, pergunte qual chamou mais atenção.
+- Se o cliente pedir para falar com um humano/vendedor/atendente, use a tool handoff com motivo "pedido_cliente".
+- O sistema salva automaticamente forma de pagamento, prazo e capacidade financeira a partir das mensagens. Você precisa chamar ferramentas apenas para:
+  - registrar_nome(nome): assim que o cliente disser o nome
+  - confirmar_interesse(veiculo_interesse_id): quando o cliente confirmar um veículo específico
+  - handoff: quando score 5, cliente pedir humano, ou foto de entrada
+- Quando o cliente confirmar interesse em um veículo específico (ex: "esse", "aquele", "Certinho", "gostei desse"), chame imediatamente confirmar_interesse com o veiculo_interesse_id do veículo confirmado (use o campo "id" retornado pelo consultar_estoque). Não espere o cliente confirmar nome do modelo — basta confirmar que é aquele.
 
-Score de qualificação:
+REGRAS DE SCORE E HANDOFF — leia com atenção:
+
+O sistema calcula o score automaticamente. Você NÃO precisa calcular nem salvar o score — apenas agir quando o contexto indicar.
+
+Score 4 (contexto indicar "Score 4 atingido"):
+→ O dono já foi notificado automaticamente pelo sistema.
+→ NUNCA chame handoff ao atingir score 4. Continue a conversa perguntando sobre a capacidade financeira.
+
+Score 5 (contexto indicar "Score 5: chame handoff"):
+→ Chame handoff com motivo "score5" e um resumo completo da conversa.
+→ Escreva uma despedida natural e contextualizada — mencione o que foi combinado (visita, próximo passo, veículo de interesse). Não use frases genéricas.
+
+HANDOFF só é acionado em 3 situações exatas:
+1. Score 5 atingido (capacidade financeira confirmada) — o contexto indicará.
+2. Cliente pede EXPLICITAMENTE falar com humano/vendedor/atendente — palavras como "falar com alguém", "quero um vendedor", "me passa para um humano".
+3. Cliente enviou foto de veículo para entrada (tratado automaticamente pelo sistema).
+Agendar visita, dizer "pode ser", concordar com horário — NADA disso é handoff. Siga a conversa normalmente.
+
+Score de qualificação (referência):
 1 = Apenas curiosidade, sem informações
 2 = Veículo identificado
 3 = Veículo + prazo OU veículo + pagamento
@@ -298,19 +336,28 @@ const TOOLS = [
   {
     type: 'function',
     function: {
-      name: 'salvar_lead',
-      description: 'Salva ou atualiza informações do lead no CRM',
+      name: 'registrar_nome',
+      description: 'Salva o nome do cliente assim que ele informar. Chame imediatamente quando o cliente disser o nome.',
       parameters: {
         type: 'object',
         properties: {
-          nome:                  { type: 'string' },
-          veiculo_interesse_id:  { type: 'string', description: 'UUID do veículo de interesse' },
-          forma_pagamento:       { type: 'string', enum: ['financiamento', 'à vista'] },
-          prazo_compra:          { type: 'string', description: 'imediato, 30 dias, pesquisando...' },
-          capacidade_financeira: { type: 'string', enum: ['carta_aprovada', 'comprovante_renda', 'a_vista_confirmado', 'sem_informacao'] },
-          score_qualificacao:    { type: 'integer', minimum: 1, maximum: 5 },
-          resumo:                { type: 'string', description: 'Resumo da conversa para o dono' },
+          nome: { type: 'string', description: 'Nome do cliente' },
         },
+        required: ['nome'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'confirmar_interesse',
+      description: 'Registra o veículo de interesse confirmado pelo cliente. Chame quando o cliente confirmar interesse explícito em um veículo específico (ex: "esse", "aquele", "certinho", "gostei desse").',
+      parameters: {
+        type: 'object',
+        properties: {
+          veiculo_interesse_id: { type: 'string', description: 'UUID do veículo confirmado (campo "id" retornado pelo consultar_estoque)' },
+        },
+        required: ['veiculo_interesse_id'],
       },
     },
   },
@@ -318,7 +365,7 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'handoff',
-      description: 'Transfere o atendimento definitivamente para o dono. Use quando: score 5 atingido, cliente pede humano, ou cliente enviou foto de entrada. Inclua todos os dados coletados — eles serão salvos automaticamente.',
+      description: 'Transfere o atendimento DEFINITIVAMENTE para o dono — o agente para de responder. Use APENAS em 3 casos: (1) score 5 atingido com capacidade_financeira confirmada (carta_aprovada ou a_vista_confirmado), (2) cliente pediu EXPLICITAMENTE falar com humano/vendedor, (3) cliente enviou foto de veículo para entrada. NUNCA use ao atingir score 4 — use notificar_score4 nesse caso.',
       parameters: {
         type: 'object',
         properties: {
@@ -330,24 +377,6 @@ const TOOLS = [
           capacidade_financeira: { type: 'string', enum: ['carta_aprovada', 'comprovante_renda', 'a_vista_confirmado', 'sem_informacao'] },
         },
         required: ['motivo', 'resumo'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'notificar_score4',
-      description: 'Notifica o dono quando score 4 é atingido (veículo + prazo + pagamento). O agente CONTINUA respondendo. Inclua todos os dados coletados — eles serão salvos automaticamente.',
-      parameters: {
-        type: 'object',
-        properties: {
-          resumo:                { type: 'string', description: 'Resumo do lead para o dono' },
-          veiculo_interesse_id:  { type: 'string', description: 'UUID do veículo de interesse (id retornado pelo consultar_estoque)' },
-          forma_pagamento:       { type: 'string', enum: ['financiamento', 'à vista'] },
-          prazo_compra:          { type: 'string' },
-          capacidade_financeira: { type: 'string', enum: ['carta_aprovada', 'comprovante_renda', 'a_vista_confirmado', 'sem_informacao'] },
-        },
-        required: ['resumo'],
       },
     },
   },
@@ -407,6 +436,13 @@ const TOOLS = [
 function buildContextoLead(lead) {
   if (!lead) return '';
   const linhas = [];
+
+  // Período do dia (horário de Brasília) para a Ana adaptar a saudação
+  const agora = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+  const hora = agora.getHours();
+  const periodo = hora < 12 ? 'manhã' : hora < 18 ? 'tarde' : 'noite';
+  linhas.push(`Período do dia: ${periodo}`);
+
   if (lead.nome)                  linhas.push(`Nome: ${lead.nome}`);
   if (lead.veiculo_interesse_id)  linhas.push(`Veículo de interesse já confirmado (ID: ${lead.veiculo_interesse_id}) — não pergunte novamente qual veículo ele quer.`);
   if (lead.forma_pagamento)       linhas.push(`Forma de pagamento: ${lead.forma_pagamento}`);
@@ -414,7 +450,8 @@ function buildContextoLead(lead) {
   if (lead.capacidade_financeira) linhas.push(`Capacidade financeira: ${lead.capacidade_financeira}`);
   const score = lead.score_qualificacao ?? 0;
   linhas.push(`Score atual: ${score}`);
-  if (score >= 4) linhas.push(`ATENÇÃO: notificar_score4 JÁ FOI disparado. NÃO chame novamente.`);
+  if (score === 4) linhas.push(`Score 4 atingido: dono já foi notificado. Continue a conversa perguntando a capacidade financeira.`);
+  if (score >= 5)  linhas.push(`Score 5: chame handoff com motivo "score5" agora.`);
   if (lead.atendimento_humano)    linhas.push(`Atendimento humano: ativo — NÃO faça handoff novamente.`);
   return `\n\nDados já coletados deste cliente (não pergunte novamente):\n${linhas.join('\n')}`;
 }
@@ -512,8 +549,6 @@ async function executarTool(nome, args, lead, contato, canal) {
         });
 
         if (data?.length) {
-          // Guardar veículos exibidos para uso na extração da próxima mensagem
-          if (lead?.id) lastVeiculosMap.set(lead.id, data.map(formatar));
           return { disponiveis: data.map(formatar) };
         }
 
@@ -535,56 +570,36 @@ async function executarTool(nome, args, lead, contato, canal) {
         return { encontrado: true, veiculo: { ...data } };
       }
 
-      case 'salvar_lead': {
-        const payload = { ...args, contato, canal };
-        delete payload.resumo; // resumo não é campo do banco
-
-        if (lead?.id) {
-          await supabase.from('leads').update(payload).eq('id', lead.id);
-          return { ok: true, lead_id: lead.id };
-        }
-
-        const { data: novoLead, error } = await supabase
-          .from('leads')
-          .insert({ contato, canal, ...payload })
-          .select('id')
-          .single();
-
-        if (error) return { erro: 'Erro ao salvar lead' };
-        // Atualizar referência de lead_id no escopo da chamada atual
-        lead.id = novoLead.id;
-        return { ok: true, lead_id: novoLead.id };
+      case 'registrar_nome': {
+        if (!lead?.id || !args.nome) return { erro: 'Dados insuficientes' };
+        console.log('[tool:registrar_nome] nome:', args.nome, '| lead:', lead.id);
+        const { error: errNome } = await supabase.from('leads').update({ nome: args.nome }).eq('id', lead.id);
+        if (errNome) { console.error('[tool:registrar_nome] erro Supabase:', errNome.message); return { erro: 'Erro ao salvar nome' }; }
+        lead.nome = args.nome;
+        console.log('[tool:registrar_nome] salvo com sucesso');
+        return { ok: true };
       }
 
-      case 'handoff':
-        // Salvar dados recebidos na chamada antes de executar o handoff
-        if (lead?.id) {
-          const camposHandoff = {};
-          if (args.veiculo_interesse_id)  camposHandoff.veiculo_interesse_id  = args.veiculo_interesse_id;
-          if (args.forma_pagamento)       camposHandoff.forma_pagamento       = args.forma_pagamento;
-          if (args.prazo_compra)          camposHandoff.prazo_compra          = args.prazo_compra;
-          if (args.capacidade_financeira) camposHandoff.capacidade_financeira = args.capacidade_financeira;
-          if (Object.keys(camposHandoff).length) {
-            await supabase.from('leads').update(camposHandoff).eq('id', lead.id);
-          }
-        }
-        return { ok: true, agendado: true };
+      case 'confirmar_interesse': {
+        if (!lead?.id || !args.veiculo_interesse_id) return { erro: 'Dados insuficientes' };
+        console.log('[tool:confirmar_interesse] veiculo_id:', args.veiculo_interesse_id, '| lead:', lead.id);
+        const { error: errVeiculo } = await supabase.from('leads').update({ veiculo_interesse_id: args.veiculo_interesse_id }).eq('id', lead.id);
+        if (errVeiculo) { console.error('[tool:confirmar_interesse] erro Supabase:', errVeiculo.message); return { erro: 'Erro ao salvar veículo' }; }
+        lead.veiculo_interesse_id = args.veiculo_interesse_id;
+        console.log('[tool:confirmar_interesse] salvo com sucesso');
+        return { ok: true };
+      }
 
-      case 'notificar_score4':
-        // Salvar dados e disparar notificação imediatamente (não diferido)
-        if (lead?.id) {
-          const camposScore4 = { score_qualificacao: 4 };
-          if (args.veiculo_interesse_id)  camposScore4.veiculo_interesse_id  = args.veiculo_interesse_id;
-          if (args.forma_pagamento)       camposScore4.forma_pagamento       = args.forma_pagamento;
-          if (args.prazo_compra)          camposScore4.prazo_compra          = args.prazo_compra;
-          if (args.capacidade_financeira) camposScore4.capacidade_financeira = args.capacidade_financeira;
-          await supabase.from('leads').update(camposScore4).eq('id', lead.id);
-          // Disparar notificação agora — não esperar fim do loop GPT
-          notificarScore4(lead.id, args.resumo || '').catch(err =>
-            console.error('[agente/tool:notificar_score4] notify error:', err.message)
-          );
+      case 'handoff': {
+        // Validação server-side: score5 exige capacidade_financeira confirmada
+        const capacidade = lead?.capacidade_financeira;
+        if (args.motivo === 'score5' && !['carta_aprovada', 'a_vista_confirmado'].includes(capacidade)) {
+          console.warn('[tool:handoff] score5 bloqueado — capacidade não confirmada. Lead:', lead?.id);
+          return { erro: 'Handoff score5 bloqueado: capacidade_financeira não confirmada. Continue perguntando ao cliente se já tem carta de crédito aprovada ou o valor disponível. NÃO chame handoff novamente até ter a confirmação.' };
         }
-        return { ok: true, notificado: true };
+        console.log('[tool:handoff] aprovado — motivo:', args.motivo, '| lead:', lead?.id);
+        return { ok: true, agendado: true };
+      }
 
       case 'verificar_horario': {
         const dentro = await verificarHorario();
@@ -622,121 +637,106 @@ async function executarTool(nome, args, lead, contato, canal) {
 // ─────────────────────────────────────────────────────────
 // EXTRAÇÃO SERVER-SIDE — independente do GPT principal
 // ─────────────────────────────────────────────────────────
-// Usa gpt-4o-mini com tool_choice forçado para extrair dados
-// estruturados de cada mensagem do cliente e salvar no banco.
+// Usa gpt-4o-mini com JSON mode para extrair dados estruturados
+// da mensagem do cliente e salvar no banco.
 // Roda ANTES do GPT principal para garantir que o contexto
 // passado ao GPT já reflete os dados da mensagem atual.
 
 async function extrairEhSalvarDados(textoCliente, lead) {
   if (!textoCliente?.trim() || !lead?.id) return;
 
-  const veiculosExibidos = lastVeiculosMap.get(lead.id) || [];
-  const veiculosCtx = veiculosExibidos.length
-    ? `\nVeículos já apresentados ao cliente (use o id para veiculo_confirmado_id se o cliente confirmar interesse):\n` +
-      veiculosExibidos.map(v => `id:${v.id} | ${v.descricao} | ${v.preco_venda}`).join('\n')
-    : '';
+  console.log('[extração] iniciando para lead', lead.id, '| texto:', textoCliente.slice(0, 60));
 
-  let completion;
+  let dados;
   try {
-    completion = await openai.chat.completions.create({
+    const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
+      response_format: { type: 'json_object' },
+      temperature: 0,
       messages: [
         {
           role: 'system',
-          content: `Você é um extrator de dados de conversas de vendas de carros. Analise a mensagem do cliente e extraia SOMENTE o que foi mencionado explicitamente NESTA mensagem. Use null para campos não mencionados.${veiculosCtx}`,
+          content: `Extraia dados da mensagem do cliente de uma concessionária. Retorne JSON com estes campos (null se não mencionado):
+- nome: string — nome próprio se o cliente se identificou nesta mensagem
+- forma_pagamento: "financiamento" | "à vista" | null
+- prazo_compra: string — prazo mencionado (ex: "essa semana", "30 dias", "imediato", "fim do mês") | null
+- capacidade_financeira: "carta_aprovada" | "a_vista_confirmado" | "sem_informacao" | null
+  (carta_aprovada = cliente disse que JÁ TEM carta de crédito aprovada; a_vista_confirmado = cliente disse que JÁ TEM o valor disponível; sem_informacao = ainda não tem ou está buscando)`,
         },
         { role: 'user', content: textoCliente },
       ],
-      tools: [{
-        type: 'function',
-        function: {
-          name: 'registrar_dados_cliente',
-          description: 'Registra dados extraídos da mensagem',
-          parameters: {
-            type: 'object',
-            properties: {
-              nome: {
-                type: 'string',
-                description: 'Nome do cliente se mencionou o próprio nome. null se não mencionou.',
-              },
-              forma_pagamento: {
-                type: 'string',
-                enum: ['financiamento', 'à vista'],
-                description: 'Forma de pagamento se mencionada. null se não mencionou.',
-              },
-              prazo_compra: {
-                type: 'string',
-                description: 'Prazo para comprar (ex: "essa semana", "fim do mês", "30 dias", "imediato"). null se não mencionou.',
-              },
-              capacidade_financeira: {
-                type: 'string',
-                enum: ['carta_aprovada', 'a_vista_confirmado', 'sem_informacao'],
-                description: 'carta_aprovada: já tem carta de crédito aprovada. a_vista_confirmado: confirmou que já tem o valor disponível. sem_informacao: disse que ainda não tem ou está buscando. null se não mencionou.',
-              },
-              veiculo_confirmado_id: {
-                type: 'string',
-                description: 'UUID do veículo confirmado pelo cliente (da lista acima). Só preencha se o cliente sinalizou interesse claro em UM veículo específico da lista (ex: "esse", "o de 54 mil", "certinho", "gostei desse"). null caso contrário.',
-              },
-            },
-          },
-        },
-      }],
-      tool_choice: { type: 'function', function: { name: 'registrar_dados_cliente' } },
-      temperature: 0,
     });
+    dados = JSON.parse(completion.choices[0].message.content);
+    console.log('[extração] gpt-4o-mini retornou:', JSON.stringify(dados));
   } catch (err) {
-    console.error('[agente/extração] erro na chamada GPT-mini:', err.message);
+    console.error('[extração] falha na chamada gpt-4o-mini:', err.message);
     return;
   }
 
-  const tc = completion.choices[0]?.message?.tool_calls?.[0];
-  if (!tc) return;
-
-  let dados;
-  try { dados = JSON.parse(tc.function.arguments); } catch { return; }
-
-  // Só salvar campos não-nulos e que não estão já preenchidos no lead
   const payload = {};
-  if (dados.nome                  && !lead.nome)                  payload.nome                  = dados.nome;
-  if (dados.forma_pagamento       && !lead.forma_pagamento)       payload.forma_pagamento       = dados.forma_pagamento;
-  if (dados.prazo_compra          && !lead.prazo_compra)          payload.prazo_compra          = dados.prazo_compra;
-  if (dados.capacidade_financeira && !lead.capacidade_financeira) payload.capacidade_financeira = dados.capacidade_financeira;
-  if (dados.veiculo_confirmado_id && !lead.veiculo_interesse_id)  payload.veiculo_interesse_id  = dados.veiculo_confirmado_id;
+  if (dados.nome && !lead.nome)           payload.nome             = dados.nome;
+  if (dados.forma_pagamento)              payload.forma_pagamento  = dados.forma_pagamento;
+  if (dados.prazo_compra)                 payload.prazo_compra     = dados.prazo_compra;
+  const podeCapacidade = !lead.capacidade_financeira || lead.capacidade_financeira === 'sem_informacao';
+  if (dados.capacidade_financeira && podeCapacidade) payload.capacidade_financeira = dados.capacidade_financeira;
 
-  if (!Object.keys(payload).length) return;
+  if (!Object.keys(payload).length) {
+    console.log('[extração] nada novo para salvar');
+    return;
+  }
 
-  await supabase.from('leads').update(payload).eq('id', lead.id);
-  console.log('[agente/extração] dados salvos:', JSON.stringify(payload));
+  console.log('[extração] salvando no lead', lead.id, ':', JSON.stringify(payload));
+  const { error } = await supabase.from('leads').update(payload).eq('id', lead.id);
+  if (error) {
+    console.error('[extração] erro Supabase ao salvar:', error.message);
+    return;
+  }
+  console.log('[extração] salvo com sucesso');
+  Object.assign(lead, payload);
 }
 
 // ─────────────────────────────────────────────────────────
-// AUTO-CHECK SCORE 4 — fallback server-side
+// SCORE — cálculo puro + acionamento com notificação
 // ─────────────────────────────────────────────────────────
-// Garante que o dono é notificado mesmo se GPT não chamar notificar_score4
 
-async function autoCheckScore4(leadId, prevScore) {
-  if (prevScore >= 4) return; // já notificado antes — não repetir
+function computarScore(lead) {
+  if (!lead.veiculo_interesse_id) return 1;
+  const temPrazo      = !!lead.prazo_compra;
+  const temPagamento  = !!lead.forma_pagamento;
+  const temCapacidade = ['carta_aprovada', 'a_vista_confirmado'].includes(lead.capacidade_financeira);
 
-  const { data: leadAtual } = await supabase
-    .from('leads')
-    .select('score_qualificacao, veiculo_interesse_id, prazo_compra, forma_pagamento, capacidade_financeira')
-    .eq('id', leadId)
-    .single();
+  if (temPrazo && temPagamento && temCapacidade) return 5;
+  if (temPrazo && temPagamento)                  return 4;
+  if (temPrazo || temPagamento)                  return 3;
+  return 2;
+}
 
-  if (!leadAtual) return;
-  if ((leadAtual.score_qualificacao ?? 0) >= 4) return; // GPT já salvou score 4 — notificação já foi
+async function acionarScore(leadId, lead, prevScore) {
+  const novoScore = computarScore(lead);
+  console.log('[score] lead:', leadId, '| prev:', prevScore, '→ novo:', novoScore);
+  if (novoScore === prevScore) return novoScore;
 
-  const temVeiculo   = !!leadAtual.veiculo_interesse_id;
-  const temPrazo     = !!leadAtual.prazo_compra;
-  const temPagamento = !!leadAtual.forma_pagamento;
+  const { error } = await supabase.from('leads').update({ score_qualificacao: novoScore }).eq('id', leadId);
+  if (error) console.error('[score] erro ao salvar score:', error.message);
+  else lead.score_qualificacao = novoScore;
 
-  if (temVeiculo && temPrazo && temPagamento) {
-    console.log('[agente] autoCheckScore4: critérios atingidos — disparando notificação');
-    await supabase.from('leads').update({ score_qualificacao: 4 }).eq('id', leadId);
-    await notificarScore4(leadId, 'Score 4 atingido (verificação automática do servidor)').catch(err =>
-      console.error('[agente/autoCheckScore4]', err.message)
+  if (novoScore >= 4 && prevScore < 4) {
+    console.log('[score] score 4 atingido — notificando dono');
+    notificarScore4(leadId, montarResumoScore4(lead)).catch(err =>
+      console.error('[score] erro notificarScore4:', err.message)
     );
   }
+
+  return novoScore;
+}
+
+function montarResumoScore4(lead) {
+  const partes = [];
+  if (lead.nome)                  partes.push(`Cliente: ${lead.nome}`);
+  if (lead.forma_pagamento)       partes.push(`Pagamento: ${lead.forma_pagamento}`);
+  if (lead.prazo_compra)          partes.push(`Prazo: ${lead.prazo_compra}`);
+  if (lead.capacidade_financeira) partes.push(`Capacidade: ${lead.capacidade_financeira}`);
+  return partes.join(' · ') || 'Lead qualificado (score 4)';
 }
 
 // ─────────────────────────────────────────────────────────
@@ -744,10 +744,8 @@ async function autoCheckScore4(leadId, prevScore) {
 // ─────────────────────────────────────────────────────────
 
 async function executarHandoff(leadId, motivo, resumo, contato, canal) {
-  // Mensagem ao cliente antes de transferir
-  const msgCliente = 'Vou te conectar com nosso consultor agora mesmo — em instantes ele entra em contato contigo.';
-  await enviarParaCliente(contato, canal, msgCliente);
-
+  // A mensagem ao cliente já foi enviada pelo GPT como parte da resposta principal.
+  // Aqui apenas registramos o handoff no banco e notificamos o dono.
   await handoffAutomatico(leadId, motivo, resumo);
 }
 

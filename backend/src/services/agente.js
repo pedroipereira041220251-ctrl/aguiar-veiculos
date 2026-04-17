@@ -30,6 +30,9 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const debounceMap = new Map();
 const DEBOUNCE_MS = 3000;
 
+// Últimos veículos exibidos por lead — necessário para o GPT e extrator
+// identificarem o UUID quando o cliente confirmar na próxima mensagem
+const lastVeiculosMap = new Map();
 
 // ─────────────────────────────────────────────────────────
 // ENTRY POINT
@@ -151,8 +154,9 @@ async function processarComIA({ contato, canal, mensagens, body, lead_id, imageU
 
   // 5. Extração server-side: salva dados da mensagem antes do GPT principal
   const prevScore = lead.score_qualificacao ?? 0;
-  console.log('[pipeline] passo 5 — extração server-side | prevScore:', prevScore);
-  await extrairEhSalvarDados(textoConsolidado, lead);
+  const veiculosExibidos = lastVeiculosMap.get(lead.id) || [];
+  console.log('[pipeline] passo 5 — extração server-side | prevScore:', prevScore, '| veículos em cache:', veiculosExibidos.length);
+  await extrairEhSalvarDados(textoConsolidado, lead, veiculosExibidos);
 
   // 5b. Re-buscar lead com campos recém-extraídos para contexto atualizado
   console.log('[pipeline] passo 5b — re-fetch lead do DB');
@@ -180,7 +184,7 @@ async function processarComIA({ contato, canal, mensagens, body, lead_id, imageU
 
   // 7. Chamar GPT-4o com contexto atualizado
   console.log('[pipeline] passo 7 — chamando GPT-4o | modelo:', process.env.OPENAI_MODEL || 'gpt-4o', '| key:', process.env.OPENAI_API_KEY ? 'ok' : 'AUSENTE');
-  const resposta = await chamarGPT(mensagensGPT, leadParaGPT, contato, canal, buildContextoLead(leadParaGPT));
+  const resposta = await chamarGPT(mensagensGPT, leadParaGPT, contato, canal, buildContextoLead(leadParaGPT, veiculosExibidos));
   console.log('[pipeline] resposta GPT:', resposta?.texto?.slice(0, 80) || 'null');
   if (!resposta) return;
 
@@ -433,7 +437,7 @@ const TOOLS = [
 // LOOP GPT-4o COM TOOL CALLS
 // ─────────────────────────────────────────────────────────
 
-function buildContextoLead(lead) {
+function buildContextoLead(lead, veiculosExibidos = []) {
   if (!lead) return '';
   const linhas = [];
 
@@ -453,6 +457,15 @@ function buildContextoLead(lead) {
   if (score === 4) linhas.push(`Score 4 atingido: dono já foi notificado. Continue a conversa perguntando a capacidade financeira.`);
   if (score >= 5)  linhas.push(`Score 5: chame handoff com motivo "score5" agora.`);
   if (lead.atendimento_humano)    linhas.push(`Atendimento humano: ativo — NÃO faça handoff novamente.`);
+
+  // Injetar veículos exibidos para que o GPT tenha os UUIDs no contexto
+  // e possa chamar confirmar_interesse corretamente na próxima mensagem
+  if (!lead.veiculo_interesse_id && veiculosExibidos.length) {
+    linhas.push(`\nVeículos apresentados ao cliente nesta conversa (use o id ao chamar confirmar_interesse):`);
+    veiculosExibidos.forEach(v => linhas.push(`  id:${v.id} | ${v.descricao} | ${v.preco_venda}`));
+    linhas.push(`Quando o cliente confirmar qual veículo quer, chame confirmar_interesse com o id correspondente acima.`);
+  }
+
   return `\n\nDados já coletados deste cliente (não pergunte novamente):\n${linhas.join('\n')}`;
 }
 
@@ -549,6 +562,7 @@ async function executarTool(nome, args, lead, contato, canal) {
         });
 
         if (data?.length) {
+          if (lead?.id) lastVeiculosMap.set(lead.id, data.map(formatar));
           return { disponiveis: data.map(formatar) };
         }
 
@@ -642,10 +656,16 @@ async function executarTool(nome, args, lead, contato, canal) {
 // Roda ANTES do GPT principal para garantir que o contexto
 // passado ao GPT já reflete os dados da mensagem atual.
 
-async function extrairEhSalvarDados(textoCliente, lead) {
+async function extrairEhSalvarDados(textoCliente, lead, veiculosExibidos = []) {
   if (!textoCliente?.trim() || !lead?.id) return;
 
   console.log('[extração] iniciando para lead', lead.id, '| texto:', textoCliente.slice(0, 60));
+
+  const veiculosCtx = (!lead.veiculo_interesse_id && veiculosExibidos.length)
+    ? `\n\nVeículos apresentados ao cliente (para veiculo_confirmado_id):\n` +
+      veiculosExibidos.map(v => `id:${v.id} | ${v.descricao} | ${v.preco_venda}`).join('\n') +
+      `\nPreencha veiculo_confirmado_id se o cliente sinalizou interesse claro em UM desses (ex: "esse", "o primeiro", "certinho", "gostei desse").`
+    : '';
 
   let dados;
   try {
@@ -661,7 +681,8 @@ async function extrairEhSalvarDados(textoCliente, lead) {
 - forma_pagamento: "financiamento" | "à vista" | null
 - prazo_compra: string — prazo mencionado (ex: "essa semana", "30 dias", "imediato", "fim do mês") | null
 - capacidade_financeira: "carta_aprovada" | "a_vista_confirmado" | "sem_informacao" | null
-  (carta_aprovada = cliente disse que JÁ TEM carta de crédito aprovada; a_vista_confirmado = cliente disse que JÁ TEM o valor disponível; sem_informacao = ainda não tem ou está buscando)`,
+  (carta_aprovada = já tem carta de crédito; a_vista_confirmado = já tem o valor; sem_informacao = ainda não tem)
+- veiculo_confirmado_id: string UUID | null${veiculosCtx}`,
         },
         { role: 'user', content: textoCliente },
       ],
@@ -679,6 +700,7 @@ async function extrairEhSalvarDados(textoCliente, lead) {
   if (dados.prazo_compra)                 payload.prazo_compra     = dados.prazo_compra;
   const podeCapacidade = !lead.capacidade_financeira || lead.capacidade_financeira === 'sem_informacao';
   if (dados.capacidade_financeira && podeCapacidade) payload.capacidade_financeira = dados.capacidade_financeira;
+  if (dados.veiculo_confirmado_id && !lead.veiculo_interesse_id) payload.veiculo_interesse_id = dados.veiculo_confirmado_id;
 
   if (!Object.keys(payload).length) {
     console.log('[extração] nada novo para salvar');

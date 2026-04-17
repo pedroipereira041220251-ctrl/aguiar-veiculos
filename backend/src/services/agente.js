@@ -46,15 +46,15 @@ export async function handler({ contato, canal, texto, imageUrl = null, body, le
     const entry = debounceMap.get(chave);
     clearTimeout(entry.timer);
     if (texto) entry.mensagens.push(texto);
-    if (imageUrl) entry.imageUrl = imageUrl;
+    if (imageUrl) entry.imageUrls.push(imageUrl);
   } else {
-    debounceMap.set(chave, { mensagens: texto ? [texto] : [], body, imageUrl: imageUrl || null });
+    debounceMap.set(chave, { mensagens: texto ? [texto] : [], body, imageUrls: imageUrl ? [imageUrl] : [] });
   }
 
   const entry = debounceMap.get(chave);
   entry.timer = setTimeout(async () => {
     debounceMap.delete(chave);
-    await processarComIA({ contato, canal, mensagens: entry.mensagens, body: entry.body, imageUrl: entry.imageUrl, lead_id })
+    await processarComIA({ contato, canal, mensagens: entry.mensagens, body: entry.body, imageUrls: entry.imageUrls, lead_id })
       .catch(async err => {
         console.error('[agente] Erro no processamento:', err.message || err);
         // Avisar o cliente que houve um problema em vez de sumir
@@ -69,8 +69,8 @@ export async function handler({ contato, canal, texto, imageUrl = null, body, le
 // PROCESSAMENTO PRINCIPAL
 // ─────────────────────────────────────────────────────────
 
-async function processarComIA({ contato, canal, mensagens, body, lead_id, imageUrl = null }) {
-  console.log('[agente] processarComIA iniciado:', contato, '| msgs:', mensagens?.length, '| foto:', !!imageUrl);
+async function processarComIA({ contato, canal, mensagens, body, lead_id, imageUrls = [] }) {
+  console.log('[agente] processarComIA iniciado:', contato, '| msgs:', mensagens?.length, '| fotos:', imageUrls.length);
 
   // 1. Verificar horário de atendimento
   const dentroHorario = await verificarHorario();
@@ -99,48 +99,36 @@ async function processarComIA({ contato, canal, mensagens, body, lead_id, imageU
   // Checar novamente após busca (handoff pode ter ocorrido em paralelo)
   if (lead.atendimento_humano) return;
 
-  // ── Tratamento de foto (Fase 2) ────────────────────────────
-  if (imageUrl) {
-    const { isVeiculo, dados, descricao } = await analisarImagem(imageUrl);
+  // ── Tratamento de fotos (Fase 2) ──────────────────────────
+  if (imageUrls.length > 0) {
+    for (const imageUrl of imageUrls) {
+      const { isVeiculo, dados, descricao } = await analisarImagem(imageUrl);
 
-    if (isVeiculo) {
-      // Salvar URL da foto no lead
-      await supabase.from('leads').update({ foto_entrada_url: imageUrl }).eq('id', lead.id);
+      if (isVeiculo) {
+        // Salvar URL da última foto no lead
+        await supabase.from('leads').update({ foto_entrada_url: imageUrl }).eq('id', lead.id);
 
-      // Notificar dono (WA + Telegram)
-      await notificarFotoEntrada({
-        fotoUrl:        imageUrl,
-        modelo:         dados.modelo || 'não identificado',
-        ano:            dados.ano_estimado || null,
-        km:             null,
-        condicao:       dados.condicao || null,
-        contatoCliente: contato,
-      }).catch(err => console.error('[agente/foto] notificar:', err.message));
+        // Notificar dono (WA + Telegram) — sem handoff, conversa continua
+        await notificarFotoEntrada({
+          fotoUrl:        imageUrl,
+          modelo:         dados.modelo || null,
+          ano:            dados.ano_estimado || null,
+          km:             null,
+          condicao:       dados.condicao || null,
+          contatoCliente: contato,
+        }).catch(err => console.error('[agente/foto] notificar:', err.message));
 
-      // Resposta neutra ao cliente — sem opinar sobre o veículo
-      const msgCliente = 'Foto recebida! Vou encaminhar para nossa equipe avaliar. Em breve entraremos em contato.';
-      await enviarParaCliente(contato, canal, msgCliente);
-
-      // Handoff automático
-      await executarHandoff(
-        lead.id,
-        MOTIVOS.FOTO_ENTRADA,
-        `Cliente enviou foto de veículo para entrada. ${descricao}`,
-        contato,
-        canal,
-      );
-
-      // Salvar no histórico
-      await salvarMensagens(lead.id, canal, [
-        { role: 'user',      content: `[Foto de veículo para entrada: ${descricao}]`, tipo: 'image' },
-        { role: 'assistant', content: msgCliente, tipo: 'text' },
-      ]);
-      return;
+        // Adicionar ao contexto para o GPT responder naturalmente (sem opinar no veículo)
+        const ctx = descricao
+          ? `[Cliente enviou foto de veículo para entrada: ${descricao}. Dono já foi notificado. NÃO opine sobre o estado ou valor do veículo. Apenas confirme que a foto foi recebida e continue a conversa normalmente.]`
+          : '[Cliente enviou foto de veículo para entrada. Dono já foi notificado. NÃO opine sobre o veículo. Continue a conversa normalmente.]';
+        mensagens = [...(mensagens || []), ctx];
+      } else {
+        // Não é veículo → adiciona descrição ao contexto e GPT responde normalmente
+        const descMsg = descricao ? `[Cliente enviou uma foto: ${descricao}]` : '[Cliente enviou uma foto]';
+        mensagens = [...(mensagens || []), descMsg];
+      }
     }
-
-    // Não é veículo → adiciona descrição ao contexto e deixa GPT responder normalmente
-    const descMsg = descricao ? `[Cliente enviou uma foto: ${descricao}]` : '[Cliente enviou uma foto]';
-    mensagens = [...(mensagens || []), descMsg];
   }
 
   // 3. Carregar histórico
@@ -229,7 +217,8 @@ Colete, ao longo da conversa:
 0. Nome do cliente — colete ao longo da conversa, no momento mais natural. Assim que o cliente informar o nome, chame imediatamente registrar_nome(nome). Nunca feche proposta ou avance para handoff sem ter o nome.
 1. Veículo de interesse (marca, modelo, ano ou características desejadas)
 2. Prazo de compra + forma de pagamento — pergunte os dois juntos logo após o cliente confirmar o veículo. Ex: "Para organizar aqui do nosso lado: qual é o seu prazo para comprar, e você prefere financiar ou pagar à vista?"
-3. Capacidade financeira — OBRIGATÓRIO perguntar após saber a forma de pagamento:
+3. Visita à loja — SEMPRE proponha uma visita ANTES de perguntar sobre capacidade financeira. Ex: "Que tal você passar aqui para ver o carro pessoalmente? Fica muito mais fácil de fechar. Você teria disponibilidade essa semana?" Não espere o cliente pedir.
+4. Capacidade financeira — pergunte SOMENTE depois de ter proposto a visita:
    - Se financiamento: "você já tem carta de crédito aprovada ou ainda vai buscar?"
    - Se à vista: "você já tem o valor disponível?"
 

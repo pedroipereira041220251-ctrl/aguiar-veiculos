@@ -35,7 +35,7 @@ export async function analisarImagem(imageUrl) {
   "condicao": "bom"|"regular"|"ruim"|null,
   "descricao": string
 }
-is_veiculo = true apenas se for um veículo automotor (carro, moto) aparentemente enviado para avaliação ou troca.
+is_veiculo = true SOMENTE se o assunto principal da imagem for um veículo automotor (carro, caminhonete, moto) que aparenta ser enviado para avaliação ou troca. is_veiculo = false para: documentos (CNH, RG, comprovantes), selfies, pessoas, paisagens, objetos, prints de tela, texto escrito, fotos de interior sem veículo visível, imagens com veículo ao fundo mas não como assunto principal.
 descricao = frase curta em português descrevendo o conteúdo da imagem.`,
           },
           {

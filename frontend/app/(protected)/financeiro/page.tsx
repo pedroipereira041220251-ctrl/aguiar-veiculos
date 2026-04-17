@@ -212,7 +212,11 @@ export default function FinanceiroPage() {
                     <td className="px-4 py-3 text-right hidden sm:table-cell">
                       <p className="text-sm font-bold text-text-primary">{fmt(resumo?.receita)}</p>
                     </td>
-                    <td className="px-4 py-3 hidden md:table-cell" />
+                    <td className="px-4 py-3 text-right hidden md:table-cell">
+                      <p className="text-sm font-bold text-red-400">
+                        {fmt(ranking.reduce((s, v) => s + (v.total_custos ?? 0) + (v.preco_compra ?? 0), 0))}
+                      </p>
+                    </td>
                     <td className="px-4 py-3 text-right">
                       <p className={cn('text-sm font-bold', (resumo?.lucro_real ?? 0) >= 0 ? 'text-green-400' : 'text-red-400')}>
                         {fmt(resumo?.lucro_real)}
@@ -230,7 +234,7 @@ export default function FinanceiroPage() {
       </div>
 
       {/* Custos por categoria + Estoque */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
 
         {/* Categorias de custos */}
         <div className="bg-card border border-border rounded-xl overflow-hidden">

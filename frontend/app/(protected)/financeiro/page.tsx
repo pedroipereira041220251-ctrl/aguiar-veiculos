@@ -234,7 +234,7 @@ export default function FinanceiroPage() {
       </div>
 
       {/* Custos por categoria + Estoque */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
         {/* Categorias de custos */}
         <div className="bg-card border border-border rounded-xl overflow-hidden">
@@ -275,7 +275,7 @@ export default function FinanceiroPage() {
         </div>
 
         {/* Estoque atual */}
-        <div className="bg-card border border-border rounded-xl overflow-hidden">
+        <div className="bg-card border border-border rounded-xl overflow-hidden flex flex-col">
           <div className="px-5 py-4 border-b border-border flex items-center gap-2">
             <Package className="w-4 h-4 text-text-muted" />
             <h2 className="text-sm font-semibold text-text-primary">Estoque atual</h2>
@@ -303,7 +303,7 @@ export default function FinanceiroPage() {
                 </div>
               </div>
               {(estoque?.veiculos?.length ?? 0) > 0 && (
-                <div className="divide-y divide-border overflow-y-auto max-h-52">
+                <div className="divide-y divide-border overflow-y-auto flex-1 min-h-0">
                   {estoque!.veiculos.map(v => (
                     <Link
                       key={v.id}

@@ -63,7 +63,7 @@ export async function handoffAutomatico(leadId, motivo, resumo) {
 export async function notificarScore4(leadId, resumo) {
   const { data: lead, error } = await supabase
     .from('leads')
-    .select('*, veiculos:veiculo_interesse_id(modelo, ano, placa)')
+    .select('*, veiculos:veiculo_interesse_id(modelo, ano, placa, cor, km, preco_venda)')
     .eq('id', leadId)
     .single();
 
@@ -77,6 +77,8 @@ export async function notificarScore4(leadId, resumo) {
     await supabase.from('leads').update({ score_qualificacao: 4 }).eq('id', leadId);
   }
 
+  const capacidadeConfirmada = ['carta_aprovada', 'a_vista_confirmado', 'comprovante_renda'].includes(lead.capacidade_financeira);
+
   const msg = [
     '🔔 *Lead qualificado — Score 4*',
     '',
@@ -84,13 +86,13 @@ export async function notificarScore4(leadId, resumo) {
     `📞 Contato: ${lead.contato}`,
     `🚗 Interesse: ${veiculoLabel(lead)}`,
     `💳 Pagamento: ${lead.forma_pagamento || '—'}`,
-    `💰 Capacidade: ${capacidadeLabel(lead.capacidade_financeira)}`,
+    capacidadeConfirmada ? `💰 Capacidade: ${capacidadeLabel(lead.capacidade_financeira, lead.forma_pagamento)}` : null,
     `📅 Prazo: ${lead.prazo_compra || '—'}`,
     '',
-    resumo ? `📝 ${resumo}` : '',
+    `📝 Resumo:\n${montarResumoNarrativoScore4(lead)}`,
     '',
     '👉 Acesse o painel para assumir o atendimento.',
-  ].filter(l => l !== undefined).join('\n');
+  ].filter(l => l !== null && l !== undefined).join('\n');
 
   try {
     await sendText(process.env.OWNER_PHONE_NUMBER, msg.trim());
@@ -134,6 +136,41 @@ export async function notificarFotoEntrada({ fotoUrl, modelo, ano, km, condicao,
 }
 
 // ── Helpers ────────────────────────────────────────────────
+
+function montarResumoNarrativoScore4(lead) {
+  const nome = lead.nome || 'O cliente';
+  const v = lead.veiculos;
+
+  const partes = [];
+
+  if (v) {
+    const preco = v.preco_venda ? `R$ ${Number(v.preco_venda).toLocaleString('pt-BR')}` : null;
+    const km    = v.km          ? `${Number(v.km).toLocaleString('pt-BR')} km`            : null;
+    const vDesc = [v.modelo, v.ano, v.cor ? `(${v.cor})` : null, km ? `com ${km}` : null, preco ? `por ${preco}` : null]
+      .filter(Boolean).join(' ');
+    partes.push(`${nome} está interessado em um ${vDesc}.`);
+  } else {
+    partes.push(`${nome} está interessado em um veículo.`);
+  }
+
+  const pagamento = lead.forma_pagamento;
+  const prazo     = lead.prazo_compra;
+  if (prazo && pagamento) {
+    partes.push(`Pretende comprar ${prazo} e pagar ${pagamento}.`);
+  } else if (prazo) {
+    partes.push(`Pretende comprar ${prazo}.`);
+  } else if (pagamento) {
+    partes.push(`Prefere pagar ${pagamento}.`);
+  }
+
+  const capacidadeConfirmada = ['carta_aprovada', 'a_vista_confirmado', 'comprovante_renda'].includes(lead.capacidade_financeira);
+  if (capacidadeConfirmada) {
+    partes.push(`Capacidade financeira: ${capacidadeLabel(lead.capacidade_financeira, pagamento)}.`);
+  }
+
+  return partes.join(' ');
+}
+
 function montarMensagemDono(lead, motivo, resumo) {
   const motivoLabel = {
     [MOTIVOS.SCORE5]:          '✅ Score 5 atingido (carta de crédito aprovada)',
@@ -150,7 +187,7 @@ function montarMensagemDono(lead, motivo, resumo) {
     `📞 Contato: ${lead.contato}`,
     `🚗 Interesse: ${veiculoLabel(lead)}`,
     `💳 Pagamento: ${lead.forma_pagamento || '—'}`,
-    `💰 Capacidade: ${capacidadeLabel(lead.capacidade_financeira)}`,
+    `💰 Capacidade: ${capacidadeLabel(lead.capacidade_financeira, lead.forma_pagamento)}`,
     `📅 Prazo: ${lead.prazo_compra || '—'}`,
     '',
     resumo ? `📝 Resumo:\n${resumo}` : '',
@@ -168,12 +205,16 @@ function veiculoLabel(lead) {
   return '—';
 }
 
-function capacidadeLabel(cap) {
+function capacidadeLabel(cap, formaPagamento) {
+  if (cap === 'sem_informacao' || !cap) {
+    if (formaPagamento === 'financiamento') return '🔄 Buscando carta de crédito';
+    if (formaPagamento === 'à vista')        return '🔄 Ainda juntando o valor';
+    return '🔄 Ainda buscando';
+  }
   const labels = {
-    carta_aprovada:       '✅ Carta de crédito aprovada',
-    comprovante_renda:    '📄 Comprovante de renda',
-    a_vista_confirmado:   '💵 À vista confirmado',
-    sem_informacao:       '❓ Sem informação',
+    carta_aprovada:     '✅ Carta de crédito aprovada',
+    comprovante_renda:  '📄 Comprovante de renda',
+    a_vista_confirmado: '💵 À vista confirmado',
   };
   return labels[cap] || cap || '—';
 }

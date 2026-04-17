@@ -234,10 +234,10 @@ export default function FinanceiroPage() {
       </div>
 
       {/* Custos por categoria + Estoque */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:items-start">
 
         {/* Categorias de custos */}
-        <div className="bg-card border border-border rounded-xl overflow-hidden">
+        <div className="bg-card border border-border rounded-xl overflow-hidden flex flex-col max-h-[680px]">
           <div className="px-5 py-4 border-b border-border flex items-center gap-2">
             <BarChart2 className="w-4 h-4 text-text-muted" />
             <h2 className="text-sm font-semibold text-text-primary">Custos por categoria</h2>
@@ -249,7 +249,7 @@ export default function FinanceiroPage() {
           ) : categorias.length === 0 ? (
             <p className="text-sm text-text-muted text-center py-10">Nenhum custo lançado neste mês.</p>
           ) : (
-            <div className="divide-y divide-border">
+            <div className="divide-y divide-border flex-1 min-h-0 overflow-y-auto">
               {(() => {
                 const totalCat = categorias.reduce((s, c) => s + c.total, 0);
                 return categorias.map(c => (
@@ -275,7 +275,7 @@ export default function FinanceiroPage() {
         </div>
 
         {/* Estoque atual */}
-        <div className="bg-card border border-border rounded-xl overflow-hidden flex flex-col">
+        <div className="bg-card border border-border rounded-xl overflow-hidden flex flex-col max-h-[680px]">
           <div className="px-5 py-4 border-b border-border flex items-center gap-2">
             <Package className="w-4 h-4 text-text-muted" />
             <h2 className="text-sm font-semibold text-text-primary">Estoque atual</h2>

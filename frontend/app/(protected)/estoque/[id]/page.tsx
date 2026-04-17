@@ -57,7 +57,7 @@ export default function VeiculoDetailPage() {
         setEditForm({
           placa: v.placa, marca: v.marca, modelo: v.modelo, ano: String(v.ano),
           cor: v.cor, km: String(v.km), preco_compra: String(v.preco_compra),
-          preco_venda: String(v.preco_venda), obs: v.obs ?? '',
+          preco_venda: String(v.preco_venda), obs: v.obs ?? '', tipo: v.tipo ?? '',
         });
       })
       .catch(() => setNotFound(true))
@@ -73,6 +73,7 @@ export default function VeiculoDetailPage() {
         ano: Number(editForm.ano), cor: editForm.cor, km: Number(editForm.km),
         preco_compra: Number(editForm.preco_compra), preco_venda: Number(editForm.preco_venda),
         obs: editForm.obs || undefined,
+        tipo: editForm.tipo || undefined,
       });
       // Rebusca da view para atualizar lucro estimado e outros campos calculados
       const atualizado = await api.veiculos.buscar(id);
@@ -334,6 +335,19 @@ export default function VeiculoDetailPage() {
                   />
                 </div>
               ))}
+              <div>
+                <label className="block text-xs font-medium text-text-muted mb-1">Tipo</label>
+                <select
+                  value={editForm.tipo}
+                  onChange={e => setEditForm(p => ({ ...p, tipo: e.target.value }))}
+                  className={INPUT}
+                >
+                  <option value="">—</option>
+                  {['sedan','hatch','SUV','picape','crossover','minivan','esportivo'].map(t => (
+                    <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+                  ))}
+                </select>
+              </div>
               <div className="col-span-2">
                 <label className="block text-xs font-medium text-text-muted mb-1">Observações</label>
                 <textarea
@@ -361,6 +375,12 @@ export default function VeiculoDetailPage() {
                   <p className={cn('text-sm font-medium text-text-primary mt-0.5', mono && 'font-mono')}>{v}</p>
                 </div>
               ))}
+              {veiculo.tipo && (
+                <div>
+                  <p className="text-xs text-text-muted">Tipo</p>
+                  <p className="text-sm font-medium text-text-primary mt-0.5 capitalize">{veiculo.tipo}</p>
+                </div>
+              )}
               {veiculo.obs && (
                 <div className="col-span-2">
                   <p className="text-xs text-text-muted">Observações</p>

@@ -94,7 +94,7 @@ export interface Veiculo {
   id: string; placa: string; marca: string; modelo: string; ano: number;
   cor: string; km: number; preco_compra: number; preco_venda: number;
   status: 'disponivel' | 'reservado' | 'vendido' | 'inativo';
-  preco_venda_final?: number; data_venda?: string; obs?: string;
+  tipo?: string; preco_venda_final?: number; data_venda?: string; obs?: string;
   nome_vendedor?: string; nome_comprador?: string; forma_pagamento?: string;
   fipe_referencia?: number; criado_via: string; created_at: string;
   // Da view:

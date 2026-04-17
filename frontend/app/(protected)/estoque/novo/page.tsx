@@ -8,15 +8,18 @@ import { ChevronLeft, Search, CheckCircle2 } from 'lucide-react';
 
 const INPUT = 'w-full px-3.5 py-2.5 bg-white/5 border border-border rounded-xl text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors';
 
+const TIPOS = ['sedan','hatch','SUV','picape','crossover','minivan','esportivo'] as const;
+type TipoVeiculo = typeof TIPOS[number] | '';
+
 type Form = {
   placa: string; marca: string; modelo: string; ano: string;
   cor: string; km: string; preco_compra: string; preco_venda: string;
-  fipe_referencia: string; obs: string;
+  fipe_referencia: string; obs: string; tipo: TipoVeiculo;
 };
 
 const INITIAL: Form = {
   placa: '', marca: '', modelo: '', ano: String(new Date().getFullYear()),
-  cor: '', km: '0', preco_compra: '', preco_venda: '', fipe_referencia: '', obs: '',
+  cor: '', km: '0', preco_compra: '', preco_venda: '', fipe_referencia: '', obs: '', tipo: '',
 };
 
 export default function EstoqueNovoPage() {
@@ -76,6 +79,7 @@ export default function EstoqueNovoPage() {
       };
       if (form.fipe_referencia) payload.fipe_referencia = Number(form.fipe_referencia);
       if (form.obs.trim())       payload.obs             = form.obs.trim();
+      if (form.tipo)             payload.tipo            = form.tipo;
 
       const v = await api.veiculos.criar(payload);
       router.push(`/estoque/${v.id}`);
@@ -137,11 +141,25 @@ export default function EstoqueNovoPage() {
           <Field id="modelo" label="Modelo" required value={form.modelo} onChange={v => set('modelo', v)} placeholder="Civic" />
         </div>
 
-        {/* Ano / Cor */}
+        {/* Tipo / Ano */}
         <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label htmlFor="tipo" className="block text-sm font-medium text-text-primary mb-1.5">Tipo</label>
+            <select
+              id="tipo"
+              value={form.tipo}
+              onChange={e => set('tipo', e.target.value as TipoVeiculo)}
+              className={INPUT}
+            >
+              <option value="">Selecionar...</option>
+              {TIPOS.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
+            </select>
+          </div>
           <Field id="ano" label="Ano" required type="number" value={form.ano} onChange={v => set('ano', v)} min={1950} max={2030} />
-          <Field id="cor" label="Cor" required value={form.cor} onChange={v => set('cor', v)} placeholder="Branco" />
         </div>
+
+        {/* Cor */}
+        <Field id="cor" label="Cor" required value={form.cor} onChange={v => set('cor', v)} placeholder="Branco" />
 
         {/* KM */}
         <Field id="km" label="Quilometragem" required type="number" value={form.km} onChange={v => set('km', v)} min={0} placeholder="0" />

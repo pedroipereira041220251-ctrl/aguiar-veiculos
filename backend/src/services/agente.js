@@ -203,7 +203,7 @@ Seu objetivo principal é converter clientes: qualificar, criar desejo, tratar o
 
 Identidade: nunca confirme que é robô, IA ou assistente virtual, mesmo que o cliente insista. Se perguntarem, reaja com naturalidade e personalidade — surpreenda-se com a pergunta, desvie com leveza ou redirecione o assunto. Nunca use a frase "Sou consultora de vendas aqui na Aguiar Veículos" — é robótico. Varie: "haha, sou gente sim!", "consultora aqui da loja, posso garantir", "por que pergunta isso? rsrs — pode falar comigo normalmente", etc.
 
-Primeira mensagem de um cliente novo: sempre se apresente pelo nome ("Sou a Ana, da Aguiar Veículos" ou variações). Leia o que o cliente escreveu e responda de forma coerente. Adapte a saudação ao período do dia (manhã → "Bom dia!", tarde → "Boa tarde!", noite → "Boa noite!") e varie a abertura — não use sempre "Oi".
+Primeira mensagem de um cliente novo: sempre se apresente pelo nome ("Sou a Ana, da Aguiar Veículos" ou variações). Leia o que o cliente escreveu e responda de forma coerente. OBRIGATÓRIO: inicie SEMPRE com a saudação do período do dia conforme indicado no contexto (manhã → "Bom dia!", tarde → "Boa tarde!", noite → "Boa noite!"). Nunca inicie uma primeira resposta sem a saudação temporal. Varie a abertura — não use sempre "Oi".
 
 O nome do cliente é essencial para criar proximidade — garanta que ele seja coletado ao longo da conversa. O momento certo depende do contexto: se o cliente chegou apenas com "oi", peça na primeira resposta. Se chegou com uma pergunta objetiva, você pode encaixar o pedido do nome junto com outra pergunta relevante (ex: filtro de preço), ou na próxima troca natural. Nunca avance para proposta ou handoff sem saber o nome.
 
@@ -257,7 +257,7 @@ Regras importantes:
 - Os preços retornados pela tool são os únicos corretos — exiba-os exatamente como recebidos, sem arredondar, abreviar ou interpretar. "R$ 700.000" nunca vira "70 mil".
 - Liste TODOS os veículos retornados pela tool, sem omitir nenhum.
 - Cada busca no estoque é independente. Nunca aplique filtros de tipo, modelo, ano ou cor de uma busca anterior numa busca nova, a menos que o cliente tenha explicitamente confirmado que quer o mesmo critério. Se o cliente perguntar "vocês têm SW4?", busque SW4 sem nenhum filtro.
-- Quando o cliente descreve uma CARACTERÍSTICA (espaço, conforto, potência, tamanho) e não um modelo/marca, use consultar_estoque SEM o parâmetro 'busca' — apenas com preco_max e/ou ano_min que o cliente confirmou. Dos resultados, destaque os que mais se encaixam na característica descrita. Nunca tente buscar pela palavra "espaço" ou "conforto" — isso não retorna nada.
+- Quando o cliente pedir por CATEGORIA (sedan, hatch, SUV, picape, crossover, minivan, esportivo) ou CARACTERÍSTICA (espaço, conforto, potência, tamanho), use consultar_estoque SEM o parâmetro 'busca' — apenas com preco_max e/ou ano_min que o cliente confirmou. Dos resultados retornados, use seu próprio conhecimento sobre os modelos para identificar e destacar os que se encaixam na categoria pedida. Exemplos: Corolla → sedan, HB20 → hatch, Compass/Creta/T-Cross → SUV, Hilux/S10 → picape. Nunca coloque "sedan", "SUV" ou qualquer categoria no parâmetro 'busca' — isso não retorna nada.
 - Se consultar_estoque retornar disponiveis[] vazio, informe brevemente que não temos esse veículo e faça UMA PERGUNTA CURTA sobre o que o cliente mais valoriza — depois use a resposta para fazer IMEDIATAMENTE uma nova busca com critérios diferentes.
 - Quando o cliente aceitar alternativas ou pedir "me indique qualquer veículo disponível": chame consultar_estoque SEM parâmetro 'busca' — apenas com preco_max (e ano_min se o cliente quiser). Liste o que tiver. Não pergunte mais nada.
 - Nunca repita "não temos" mais de uma vez seguida sem ter feito uma nova busca com critérios diferentes. Repetir "não temos" sem buscar é o mesmo que encerrar a conversa.
@@ -272,6 +272,11 @@ Regras importantes:
   - registrar_nome(nome): assim que o cliente disser o nome
   - confirmar_interesse(veiculo_interesse_id): quando o cliente confirmar um veículo específico
   - handoff: quando score 5, cliente pedir humano, ou foto de entrada
+  - mover_lead(status_funil): mova o lead no CRM conforme o progresso da conversa:
+    - 'contato': cliente respondeu e está em conversa ativa (padrão inicial após primeiro contato real)
+    - 'visita': cliente confirmar que vai passar na loja ou agendou visita ("vou sim", "pode ser amanhã", "combinado")
+    - 'proposta': veículo confirmado E prazo + pagamento definidos E negociando condições
+    - 'perdido': cliente encerrar sem interesse ("não preciso mais", "já comprei em outro lugar", "desisti")
 - Quando o cliente confirmar interesse em um veículo específico (ex: "esse", "aquele", "Certinho", "gostei desse"), chame imediatamente confirmar_interesse com o veiculo_interesse_id do veículo confirmado (use o campo "id" retornado pelo consultar_estoque). Não espere o cliente confirmar nome do modelo — basta confirmar que é aquele.
 
 REGRAS DE SCORE E HANDOFF — leia com atenção:
@@ -284,7 +289,7 @@ Score 4 (contexto indicar "Score 4 atingido"):
 
 Score 5 (contexto indicar "Score 5: chame handoff"):
 → Chame handoff com motivo "score5" e um resumo completo da conversa.
-→ Escreva uma despedida natural e contextualizada — mencione o que foi combinado (visita, próximo passo, veículo de interesse). Não use frases genéricas.
+→ Escreva uma mensagem de passagem natural — mencione o veículo e o próximo passo. IMPORTANTE: o dono da loja usa este MESMO número de WhatsApp, então NÃO diga "nosso consultor vai te ligar" ou "entrará em contato" — ele já está aqui. Use algo como "vou te passar para o nosso consultor agora aqui mesmo" ou "nosso consultor segue contigo por aqui". Não use frases de despedida definitiva como "Até mais!", "Foi um prazer", "Tchau".
 
 HANDOFF só é acionado em 3 situações exatas:
 1. Score 5 atingido (capacidade financeira confirmada) — o contexto indicará.
@@ -314,7 +319,7 @@ const TOOLS = [
       parameters: {
         type: 'object',
         properties: {
-          busca:     { type: 'string',  description: 'Texto para busca por marca/modelo' },
+          busca:     { type: 'string',  description: 'Texto para busca por marca/modelo específico (ex: "Honda Civic", "Toyota"). NÃO use para categorias como "sedan" ou "SUV".' },
           preco_max: { type: 'number',  description: 'Preço máximo em reais' },
           ano_min:   { type: 'integer', description: 'Ano mínimo do veículo' },
         },
@@ -388,6 +393,24 @@ const TOOLS = [
       name: 'verificar_horario',
       description: 'Verifica se está dentro do horário de atendimento configurado',
       parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'mover_lead',
+      description: 'Move o lead para outra coluna do CRM (status_funil). Use conforme o progresso da conversa.',
+      parameters: {
+        type: 'object',
+        properties: {
+          status_funil: {
+            type: 'string',
+            enum: ['contato', 'visita', 'proposta', 'fechado', 'perdido'],
+            description: 'Nova coluna do CRM',
+          },
+        },
+        required: ['status_funil'],
+      },
     },
   },
   // Stubs para Fase 2
@@ -618,6 +641,17 @@ async function executarTool(nome, args, lead, contato, canal) {
         return { dentro_horario: dentro };
       }
 
+      case 'mover_lead': {
+        if (!lead?.id || !args.status_funil) return { erro: 'Dados insuficientes' };
+        const validos = ['contato', 'visita', 'proposta', 'fechado', 'perdido'];
+        if (!validos.includes(args.status_funil)) return { erro: 'status_funil inválido' };
+        const { error: errFunil } = await supabase.from('leads').update({ status_funil: args.status_funil }).eq('id', lead.id);
+        if (errFunil) { console.error('[tool:mover_lead] erro:', errFunil.message); return { erro: 'Erro ao mover lead' }; }
+        lead.status_funil = args.status_funil;
+        console.log('[tool:mover_lead] lead', lead.id, '→', args.status_funil);
+        return { ok: true };
+      }
+
       case 'registrar_foto_entrada': {
         if (lead?.id && args.foto_url) {
           await supabase.from('leads').update({ foto_entrada_url: args.foto_url }).eq('id', lead.id);
@@ -682,7 +716,11 @@ async function extrairEhSalvarDados(textoCliente, lead, veiculosExibidos = []) {
   carta_aprovada = já tem carta de crédito APROVADA
   a_vista_confirmado = cliente afirma ter o valor TOTAL disponível agora para compra imediata
   sem_informacao = ainda não tem, está juntando, tem apenas parte, não sabe, não respondeu
-  Exemplos: "tenho o dinheiro" → a_vista_confirmado | "ainda não tenho" → sem_informacao | "tenho mais da metade" → sem_informacao | "estou juntando" → sem_informacao | "quase tenho" → sem_informacao
+  null = não mencionou capacidade (apenas escolheu forma de pagamento)
+  REGRA CRÍTICA: forma_pagamento e capacidade_financeira são campos INDEPENDENTES.
+  "vou pagar à vista", "prefiro à vista", "quero pagar à vista", "pago à vista" → forma_pagamento = "à vista", capacidade_financeira = null (escolher pagar à vista NÃO confirma que já tem o dinheiro)
+  capacidade_financeira = "a_vista_confirmado" SOMENTE quando diz explicitamente que JÁ TEM: "tenho o dinheiro", "já tenho o valor todo", "o dinheiro já está disponível"
+  Exemplos: "vou pagar à vista" → null | "tenho o dinheiro" → a_vista_confirmado | "já tenho o valor todo" → a_vista_confirmado | "tenho mais da metade" → sem_informacao | "estou juntando" → sem_informacao | "quase tenho" → sem_informacao
 - veiculo_confirmado_id: string UUID | null${veiculosCtx}`,
         },
         { role: 'user', content: textoCliente },

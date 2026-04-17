@@ -4,7 +4,22 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { api, type Veiculo } from '@/lib/api';
 import { fmt, fmtKm, STATUS_LABEL, cn } from '@/lib/utils';
-import { Plus, Search, Car, RefreshCw, TrendingUp } from 'lucide-react';
+import { Plus, Search, Car, RefreshCw, TrendingUp, ChevronLeft, ChevronRight } from 'lucide-react';
+
+function mesLabel(mes: string) {
+  const [ano, m] = mes.split('-').map(Number);
+  return new Date(ano, m - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+}
+function mesAnterior(mes: string) {
+  const [ano, m] = mes.split('-').map(Number);
+  const d = new Date(ano, m - 2, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+function mesSeguinte(mes: string) {
+  const [ano, m] = mes.split('-').map(Number);
+  const d = new Date(ano, m, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
 
 const FILTROS = [
   { value: 'disponivel', label: 'Disponíveis' },
@@ -38,6 +53,7 @@ export default function EstoquePage() {
   const [erro, setErro]         = useState(false);
   const [busca, setBusca]       = useState('');
   const [status, setStatus]     = useState('disponivel');
+  const [mes, setMes]           = useState<string>(() => new Date().toISOString().slice(0, 7));
 
   const [todos, setTodos] = useState<Veiculo[]>([]);
 
@@ -67,7 +83,9 @@ export default function EstoquePage() {
           || v.modelo.toLowerCase().includes(q)
           || v.marca.toLowerCase().includes(q);
       })
-    : veiculos;
+    : status === 'vendido'
+      ? veiculos.filter(v => v.data_venda?.startsWith(mes))
+      : veiculos;
 
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto animate-fade-in">
@@ -94,7 +112,7 @@ export default function EstoquePage() {
       </div>
 
       {/* Filtros */}
-      <div className="flex gap-2 mb-5 overflow-x-auto pb-1">
+      <div className={cn('flex gap-2 overflow-x-auto pb-1', status === 'vendido' ? 'mb-3' : 'mb-5')}>
         {FILTROS.map(f => (
           <button
             key={f.value}
@@ -110,6 +128,28 @@ export default function EstoquePage() {
           </button>
         ))}
       </div>
+
+      {/* Seletor de mês — apenas para vendidos */}
+      {status === 'vendido' && (
+        <div className="flex items-center justify-between mb-5 bg-white/5 border border-border rounded-xl px-4 py-2.5">
+          <button
+            onClick={() => setMes(mesAnterior(mes))}
+            className="p-1 text-text-muted hover:text-text-primary transition-colors"
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <span className="text-sm font-medium text-text-primary capitalize">
+            {mesLabel(mes)}
+          </span>
+          <button
+            onClick={() => setMes(mesSeguinte(mes))}
+            disabled={mes >= new Date().toISOString().slice(0, 7)}
+            className="p-1 text-text-muted hover:text-text-primary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <ChevronRight size={18} />
+          </button>
+        </div>
+      )}
 
       {/* Erro */}
       {erro && (

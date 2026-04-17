@@ -7,6 +7,8 @@ const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 // ── Schemas Zod ────────────────────────────────────────────
+const TIPO_VEICULO = z.enum(['sedan','hatch','SUV','picape','crossover','minivan','esportivo']).optional();
+
 const criarVeiculoSchema = z.object({
   placa:        z.string().min(7).transform(v => v.toUpperCase()),
   marca:        z.string().min(1),
@@ -16,6 +18,7 @@ const criarVeiculoSchema = z.object({
   km:           z.number().int().min(0),
   preco_compra: z.number().positive(),
   preco_venda:  z.number().positive(),
+  tipo:         TIPO_VEICULO,
   obs:          z.string().optional(),
   fipe_referencia: z.number().positive().optional(),
   ipva_vencimento: z.string().optional(),   // MM/AAAA → será parseado
@@ -32,6 +35,7 @@ const editarVeiculoSchema = z.object({
   km:           z.number().int().min(0).optional(),
   preco_compra: z.number().positive().optional(),
   preco_venda:  z.number().positive().optional(),
+  tipo:         TIPO_VEICULO,
   obs:          z.string().optional(),
   fipe_referencia: z.number().positive().optional(),
   status:       z.enum(['disponivel','reservado','vendido','inativo']).optional(),
@@ -69,7 +73,7 @@ const ordemFotosSchema = z.array(z.object({
 // Filtros: status, busca (placa/modelo). Inclui URL da primeira foto.
 router.get('/', async (req, res) => {
   try {
-    const { status, busca } = req.query;
+    const { status, busca, mes } = req.query;
 
     let query = supabase
       .from('vw_veiculos_com_financeiro')
@@ -77,6 +81,12 @@ router.get('/', async (req, res) => {
       .order('created_at', { ascending: false });
 
     if (status) query = query.eq('status', status);
+    if (mes && /^\d{4}-\d{2}$/.test(mes)) {
+      const [ano, m] = mes.split('-').map(Number);
+      const inicio = `${mes}-01`;
+      const fim    = new Date(ano, m, 0).toISOString().slice(0, 10); // último dia do mês
+      query = query.gte('data_venda', inicio).lte('data_venda', fim);
+    }
     if (busca) {
       query = query.or(`placa.ilike.%${busca}%,modelo.ilike.%${busca}%,marca.ilike.%${busca}%`);
     }

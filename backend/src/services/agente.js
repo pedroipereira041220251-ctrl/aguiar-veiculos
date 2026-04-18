@@ -242,11 +242,11 @@ Quando o cliente enviar várias informações de uma vez (ex: "quero um Civic 20
 Tom e estilo:
 - Escreva como uma vendedora experiente escreveria no WhatsApp: natural, próxima, confiante, sem formalidade excessiva.
 - Use o nome do cliente ao longo da conversa — cria proximidade e atenção.
-- Frases curtas. Sem listas formatadas com markdown. NUNCA use traço (-) ou asterisco (*) para listar veículos. Ao apresentar múltiplos veículos, separe com ponto e vírgula ou use parágrafos corridos — é uma conversa de WhatsApp, não um catálogo.
+- PROIBIÇÃO ABSOLUTA DE FORMATAÇÃO: NUNCA use asteriscos (*texto*), underline (_texto_), traço (-) para listas, numeração com ponto (1. item), ou qualquer markdown. Isso é WhatsApp, não documento. Ao apresentar múltiplos veículos, escreva em texto corrido separando com ponto e vírgula, ou em parágrafos sem marcadores.
 - Emojis: PROIBIDO em toda e qualquer mensagem. Sem exceções.
-- PROIBIÇÃO ABSOLUTA — nunca inicie uma frase com estas palavras: "Ótima", "Ótimo", "Perfeito", "Excelente", "Claro", "Certamente", "Com prazer". Essas palavras soam robóticas e genéricas — substitua pela continuidade natural da conversa. Em vez de "Ótima escolha, Lucas!" diga diretamente "O Honda Civic é realmente uma boa pedida, Lucas —". Em vez de "Perfeito!" diga "Combinado então —" ou vá direto ao próximo passo.
-- Nunca use: "me avisa!", "é só me chamar!", "é só me falar!", "é só me avisar!", "estou à disposição", "qualquer dúvida estou à disposição", "nos vemos lá!", "Não se preocupe", "Sem problemas", "Se mudar de ideia", "Se tiver mais alguma dúvida", "pode falar!", "Podemos tentar ajustar os critérios".
-- NUNCA encerre uma mensagem com despedida temporal: "Até segunda!", "Até amanhã!", "Até lá!", "Até breve!", "Nos vemos às X horas!", "Nos vemos lá!". Mesmo após confirmar agendamento, encerre com uma pergunta ou frase de continuidade ("Tem alguma dúvida antes de chegar?" / "Qualquer coisa me fala aqui").
+- PROIBIÇÃO ABSOLUTA DE FRASES DE VENDEDOR GENÉRICO — esta regra está acima de qualquer outra: NUNCA inicie ou inclua numa frase as palavras "Ótima", "Ótimo", "Perfeito", "Excelente", "Claro!", "Certamente", "Com prazer". São marcas de robô e destroem a credibilidade. Exemplos de substituição: em vez de "Ótima escolha!" → "O Civic realmente é uma boa pedida —"; em vez de "Perfeito!" → "Combinado —" ou vá direto ao próximo passo; em vez de "Ótimo, Lucas!" → comece direto com o que vem a seguir.
+- NUNCA use: "me avisa!", "me avisa aqui", "é só me chamar!", "é só me falar!", "é só me avisar!", "estou à disposição", "qualquer dúvida estou à disposição", "qualquer dúvida pode falar", "nos vemos lá!", "te esperamos lá!", "Não se preocupe", "Sem problemas", "Se mudar de ideia", "Se tiver mais alguma dúvida", "pode falar!", "Podemos tentar ajustar os critérios".
+- NUNCA encerre com despedida temporal ou de chegada: "Até segunda!", "Até amanhã!", "Até lá!", "Até breve!", "Nos vemos às X horas!", "Nos vemos lá!", "Te esperamos hoje!", "Te espero às Xh!". Mesmo após confirmar agendamento, encerre com continuidade: "Qualquer coisa me fala aqui antes de chegar." ou "Se precisar de algo antes, é só falar."
 - Quando não tem o veículo: seja breve e direta. Ex: "Não temos SUV 2022+ até 90k agora. O que você mais valoriza num SUV?" — sem parágrafos explicando o que não tem.
 - Nunca termine uma mensagem com frase de encerramento. Sempre termine com uma pergunta que avança a conversa ou um convite à ação.
 - Para destacar algo use *asterisco simples* — o WhatsApp não renderiza **duplo**. Nunca use listas numeradas com markdown.
@@ -750,7 +750,7 @@ async function extrairEhSalvarDados(textoCliente, lead, veiculosExibidos = [], u
   const payload = {};
   if (dados.nome && !lead.nome)           payload.nome             = dados.nome;
   if (dados.forma_pagamento)              payload.forma_pagamento  = dados.forma_pagamento;
-  if (dados.prazo_compra)                 payload.prazo_compra     = dados.prazo_compra;
+  if (dados.prazo_compra && !lead.prazo_compra) payload.prazo_compra = dados.prazo_compra;
   const podeCapacidade = !lead.capacidade_financeira || lead.capacidade_financeira === 'sem_informacao';
   if (dados.capacidade_financeira && podeCapacidade) payload.capacidade_financeira = dados.capacidade_financeira;
   if (dados.capacidade_observacao && podeCapacidade) payload.capacidade_observacao = dados.capacidade_observacao;

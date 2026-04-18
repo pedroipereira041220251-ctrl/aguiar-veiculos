@@ -19,7 +19,7 @@
 import OpenAI from 'openai';
 import supabase from '../db/supabase.js';
 import { sendText } from './waClient.js';
-import { handoffAutomatico, notificarScore4, notificarFotoEntrada, MOTIVOS } from './handoff.js';
+import { handoffAutomatico, notificarScore4, notificarCapacidadeAtualizada, notificarFotoEntrada, MOTIVOS } from './handoff.js';
 import { analisarImagem } from './vision.js';
 import { sendInstagramMessage } from './metaClient.js';
 
@@ -142,6 +142,7 @@ async function processarComIA({ contato, canal, mensagens, body, lead_id, imageU
 
   // 5. Extração server-side: salva dados da mensagem antes do GPT principal
   const prevScore = lead.score_qualificacao ?? 0;
+  const prevCapacidadeObs = lead.capacidade_observacao ?? null;
   const veiculosExibidos = lastVeiculosMap.get(lead.id) || [];
   console.log('[pipeline] passo 5 — extração server-side | prevScore:', prevScore, '| veículos em cache:', veiculosExibidos.length);
   await extrairEhSalvarDados(textoConsolidado, lead, veiculosExibidos);
@@ -163,6 +164,13 @@ async function processarComIA({ contato, canal, mensagens, body, lead_id, imageU
   // 5c. Calcular e acionar score — notifica dono se score 4 atingido
   console.log('[pipeline] passo 5c — acionarScore');
   await acionarScore(lead.id, leadParaGPT, prevScore);
+
+  // 5d. Se capacidade_observacao foi definida pela primeira vez num lead score 4, notificar dono
+  if (!prevCapacidadeObs && leadParaGPT.capacidade_observacao && (leadParaGPT.score_qualificacao ?? 0) === 4) {
+    notificarCapacidadeAtualizada(leadParaGPT).catch(e =>
+      console.error('[pipeline] erro notif capacidade obs:', e.message)
+    );
+  }
 
   // 6. Adicionar mensagem do usuário ao histórico
   const mensagensGPT = [

@@ -103,6 +103,23 @@ export async function notificarScore4(leadId, resumo) {
   }
 }
 
+// ── notificarCapacidadeAtualizada ──────────────────────────
+// Dispara quando capacidade_observacao é definida pela 1ª vez num lead score 4
+export async function notificarCapacidadeAtualizada(lead) {
+  const msg = [
+    '🔄 *Atualização — Lead score 4*',
+    '',
+    `👤 ${lead.nome || 'Sem nome'} · ${canalLabel(lead.canal)}`,
+    `💰 Capacidade: ${lead.capacidade_observacao}`,
+  ].join('\n');
+
+  try {
+    await sendText(process.env.OWNER_PHONE_NUMBER, msg.trim());
+  } catch (err) {
+    console.error('[handoff/capacidade] Erro ao notificar dono:', err.message);
+  }
+}
+
 // ── notificarFotoEntrada ───────────────────────────────────
 // Aviso de foto de entrada: vai para WhatsApp E Telegram (seção 8.1)
 // Chamado pelo agente antes do handoffAutomatico

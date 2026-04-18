@@ -218,6 +218,7 @@ Colete, ao longo da conversa:
 1. Veículo de interesse (marca, modelo, ano ou características desejadas)
 2. Prazo de compra + forma de pagamento — pergunte os dois juntos logo após o cliente confirmar o veículo. Ex: "Para organizar aqui do nosso lado: qual é o seu prazo para comprar, e você prefere financiar ou pagar à vista?"
 3. Visita à loja — SEMPRE proponha uma visita ANTES de perguntar sobre capacidade financeira. Ex: "Que tal você passar aqui para ver o carro pessoalmente? Fica muito mais fácil de fechar. Você teria disponibilidade essa semana?" Não espere o cliente pedir.
+   - Quando o cliente aceitar a visita ("pode ser", "sim", "topo", "combinado"), SEMPRE pergunte o dia e horário: "Que dia e horário ficam melhor pra você?" ou use fechamento alternativo "você prefere amanhã de manhã ou à tarde?". Nunca confirme a visita sem definir dia e hora.
 4. Capacidade financeira — pergunte SOMENTE depois de ter proposto a visita:
    - Se financiamento: "você já tem carta de crédito aprovada ou ainda vai buscar?"
    - Se à vista: "você já tem o valor disponível?"
@@ -475,7 +476,7 @@ function buildContextoLead(lead, veiculosExibidos = []) {
   if (lead.capacidade_financeira) linhas.push(`Capacidade financeira: ${lead.capacidade_financeira}`);
   const score = lead.score_qualificacao ?? 0;
   linhas.push(`Score atual: ${score}`);
-  if (score === 4) linhas.push(`Score 4 atingido: dono já foi notificado. Antes de perguntar sobre capacidade financeira, proponha uma visita à loja de forma natural (ex: "Que tal você passar aqui pra dar uma olhada no Corolla pessoalmente? Fica muito mais fácil de fechar. Você teria disponibilidade essa semana?"). Só depois de propor a visita, pergunte a capacidade financeira.`);
+  if (score === 4) linhas.push(`Score 4 atingido: dono já foi notificado. Antes de perguntar sobre capacidade financeira, proponha uma visita à loja de forma natural (ex: "Que tal você passar aqui pra dar uma olhada no Corolla pessoalmente? Fica muito mais fácil de fechar. Você teria disponibilidade essa semana?"). Se o cliente aceitar a visita, pergunte o dia e horário antes de qualquer outra coisa. Só depois de confirmar dia e hora, pergunte a capacidade financeira.`);
   if (score >= 5)  linhas.push(`Score 5: chame handoff com motivo "score5" agora.`);
   if (lead.atendimento_humano)    linhas.push(`Atendimento humano: ativo — NÃO faça handoff novamente.`);
 

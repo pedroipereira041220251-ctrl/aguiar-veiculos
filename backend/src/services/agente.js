@@ -306,6 +306,7 @@ Score 5 (contexto indicar "Score 5: chame handoff"):
 HANDOFF só é acionado em 3 situações exatas:
 1. Score 5 atingido (capacidade financeira confirmada) — o contexto indicará.
 2. Cliente pede EXPLICITAMENTE falar com humano/vendedor/atendente — palavras como "falar com alguém", "quero um vendedor", "me passa para um humano".
+   → Mensagem para este caso: curta, calorosa, que reconheça o pedido. Ex: "Entendido! Um momento que já te atendemos aqui." ou "Claro, fica à vontade — já vou te passar." NÃO use a mensagem de "deixa eu organizar e retorno" — essa é exclusiva do score 5. OBRIGATÓRIO: mesmo neste caso, inicie com a saudação temporal se for o primeiro contato (Bom dia / Boa tarde / Boa noite).
 3. Cliente enviou foto de veículo para entrada (tratado automaticamente pelo sistema).
 Agendar visita, dizer "pode ser", concordar com horário — NADA disso é handoff. Siga a conversa normalmente.
 

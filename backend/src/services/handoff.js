@@ -216,7 +216,7 @@ function montarMensagemDono(lead, motivo, resumo) {
     `📞 Contato: ${lead.contato}`,
     `🚗 Interesse: ${veiculoLabel(lead)}`,
     `💳 Pagamento: ${lead.forma_pagamento || '—'}`,
-    `💰 Capacidade: ${capacidadeLabel(lead.capacidade_financeira, lead.forma_pagamento)}`,
+    lead.forma_pagamento ? `💰 Capacidade: ${capacidadeLabel(lead.capacidade_financeira, lead.forma_pagamento)}` : null,
     `📅 Prazo: ${lead.prazo_compra || '—'}`,
     '',
     resumo ? `📝 Resumo:\n${resumo}` : '',

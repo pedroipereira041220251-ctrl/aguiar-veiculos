@@ -144,8 +144,9 @@ async function processarComIA({ contato, canal, mensagens, body, lead_id, imageU
   const prevScore = lead.score_qualificacao ?? 0;
   const prevCapacidadeObs = lead.capacidade_observacao ?? null;
   const veiculosExibidos = lastVeiculosMap.get(lead.id) || [];
+  const ultimaMsgAna = historico.filter(m => m.role === 'assistant').slice(-1)[0]?.conteudo ?? null;
   console.log('[pipeline] passo 5 — extração server-side | prevScore:', prevScore, '| veículos em cache:', veiculosExibidos.length);
-  await extrairEhSalvarDados(textoConsolidado, lead, veiculosExibidos);
+  await extrairEhSalvarDados(textoConsolidado, lead, veiculosExibidos, ultimaMsgAna);
 
   // 5b. Re-buscar lead com campos recém-extraídos para contexto atualizado
   console.log('[pipeline] passo 5b — re-fetch lead do DB');
@@ -243,7 +244,8 @@ Tom e estilo:
 - Use o nome do cliente ao longo da conversa — cria proximidade e atenção.
 - Frases curtas. Sem listas formatadas com markdown — é uma conversa, não um catálogo.
 - Emojis: PROIBIDO em toda e qualquer mensagem. Sem exceções.
-- Nunca use frases robóticas como "Claro!", "Certamente!", "Com prazer!", "Ótimo!", "Perfeito!", "Ótima escolha!", "Excelente!", "Boa escolha!", "me avisa!", "é só me chamar!", "é só me falar!", "é só me avisar!", "qualquer dúvida estou à disposição", "nos vemos lá!", "Não se preocupe", "Sem problemas", "Se mudar de ideia", "Se tiver mais alguma dúvida", "pode falar!", "Podemos tentar ajustar os critérios", "Até lá!". Prefira respostas diretas e naturais.
+- Nunca use frases robóticas como "Claro!", "Certamente!", "Com prazer!", "Ótimo!", "Perfeito!", "Ótima escolha!", "Ótima opção!", "Excelente!", "Boa escolha!", "me avisa!", "é só me chamar!", "é só me falar!", "é só me avisar!", "estou à disposição", "qualquer dúvida estou à disposição", "qualquer dúvida pode falar", "nos vemos lá!", "Não se preocupe", "Sem problemas", "Se mudar de ideia", "Se tiver mais alguma dúvida", "pode falar!", "Podemos tentar ajustar os critérios", "Até lá!", "Até [qualquer dia ou momento]!" (ex: "Até segunda!", "Até amanhã!", "Até lá!"). Prefira respostas diretas e naturais.
+- NUNCA encerre uma mensagem com despedida temporal como "Até segunda!", "Até amanhã!", "Até lá!", "Até breve!" — mesmo após confirmar um agendamento. Encerre sempre com uma pergunta ou afirmação de continuidade.
 - Quando não tem o veículo: seja breve e direta. Ex: "Não temos SUV 2022+ até 90k agora. O que você mais valoriza num SUV?" — sem parágrafos explicando o que não tem.
 - Nunca termine uma mensagem com frase de encerramento. Sempre termine com uma pergunta que avança a conversa ou um convite à ação.
 - Para destacar algo use *asterisco simples* — o WhatsApp não renderiza **duplo**. Nunca use listas numeradas com markdown.
@@ -697,7 +699,7 @@ async function executarTool(nome, args, lead, contato, canal) {
 // Roda ANTES do GPT principal para garantir que o contexto
 // passado ao GPT já reflete os dados da mensagem atual.
 
-async function extrairEhSalvarDados(textoCliente, lead, veiculosExibidos = []) {
+async function extrairEhSalvarDados(textoCliente, lead, veiculosExibidos = [], ultimaMsgAna = null) {
   if (!textoCliente?.trim() || !lead?.id) return;
 
   console.log('[extração] iniciando para lead', lead.id, '| texto:', textoCliente.slice(0, 60));
@@ -720,7 +722,7 @@ async function extrairEhSalvarDados(textoCliente, lead, veiculosExibidos = []) {
           content: `Extraia dados da mensagem do cliente de uma concessionária. Retorne JSON com estes campos (null se não mencionado):
 - nome: string — nome próprio se o cliente se identificou nesta mensagem
 - forma_pagamento: "financiamento" | "à vista" | null
-- prazo_compra: string — prazo mencionado (ex: "essa semana", "30 dias", "imediato", "fim do mês") | null
+- prazo_compra: string — prazo para COMPRAR o veículo (ex: "essa semana", "esse mês", "30 dias", "imediato"). NÃO preencher se o contexto for sobre quando o cliente terá o dinheiro disponível — isso é capacidade financeira, não prazo de compra. Se a mensagem anterior perguntou "quando você terá o valor?" ou "quando terá o dinheiro?", não extrair prazo_compra. | null
 - capacidade_financeira: "carta_aprovada" | "a_vista_confirmado" | "sem_informacao" | null
   carta_aprovada = já tem carta de crédito APROVADA
   a_vista_confirmado = cliente afirma ter o valor TOTAL disponível agora para compra imediata
@@ -730,9 +732,10 @@ async function extrairEhSalvarDados(textoCliente, lead, veiculosExibidos = []) {
   "vou pagar à vista", "prefiro à vista", "quero pagar à vista", "pago à vista" → forma_pagamento = "à vista", capacidade_financeira = null (escolher pagar à vista NÃO confirma que já tem o dinheiro)
   capacidade_financeira = "a_vista_confirmado" SOMENTE quando diz explicitamente que JÁ TEM: "tenho o dinheiro", "já tenho o valor todo", "o dinheiro já está disponível"
   Exemplos: "vou pagar à vista" → null | "tenho o dinheiro" → a_vista_confirmado | "já tenho o valor todo" → a_vista_confirmado | "tenho mais da metade" → sem_informacao | "estou juntando" → sem_informacao | "quase tenho" → sem_informacao
-- capacidade_observacao: string | null — frase curta e natural (em português) descrevendo o que o cliente disse sobre sua situação financeira. Preencher SOMENTE quando capacidade_financeira = "sem_informacao" (ou seja, quando tem parte mas não tudo). Exemplos: "Tem mais da metade do valor", "Ainda está juntando o restante", "Precisa vender o carro atual antes", "Quase tem o valor total". Quando capacidade_financeira for null ou confirmada (carta_aprovada / a_vista_confirmado) → retornar null.
+- capacidade_observacao: string | null — frase curta e natural (em português) descrevendo a situação FINANCEIRA do cliente. Preencher SOMENTE quando capacidade_financeira = "sem_informacao". Exemplos: "Tem mais da metade do valor", "Ainda está juntando o restante", "Precisa vender o carro atual antes", "Quase tem o valor total". ATENÇÃO: "tenho disponibilidade", "pode ser", "posso ir", "tenho disponibilidade essa semana" = disponibilidade de VISITA/HORÁRIO, NÃO é capacidade financeira — retornar null nesses casos. Só preencher quando o cliente mencionar explicitamente dinheiro, valor, capital. Quando capacidade_financeira for null ou confirmada → retornar null.
 - veiculo_confirmado_id: string UUID | null${veiculosCtx}`,
         },
+        ...(ultimaMsgAna ? [{ role: 'assistant', content: ultimaMsgAna }] : []),
         { role: 'user', content: textoCliente },
       ],
     });

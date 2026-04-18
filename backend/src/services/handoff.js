@@ -193,8 +193,16 @@ function montarResumoNarrativoScore4(lead) {
 }
 
 function montarMensagemDono(lead, motivo, resumo) {
+  const score5Label = lead.capacidade_financeira === 'a_vista_confirmado'
+    ? '✅ Score 5 — Valor à vista confirmado'
+    : lead.capacidade_financeira === 'carta_aprovada'
+      ? '✅ Score 5 — Carta de crédito aprovada'
+      : lead.capacidade_financeira === 'comprovante_renda'
+        ? '✅ Score 5 — Comprovante de renda'
+        : '✅ Score 5 atingido';
+
   const motivoLabel = {
-    [MOTIVOS.SCORE5]:          '✅ Score 5 atingido (carta de crédito aprovada)',
+    [MOTIVOS.SCORE5]:          score5Label,
     [MOTIVOS.PEDIDO_CLIENTE]:  '🙋 Cliente pediu falar com humano',
     [MOTIVOS.FOTO_ENTRADA]:    '📸 Cliente enviou foto de veículo de entrada',
     [MOTIVOS.ASSUMIDO_PAINEL]: '👆 Dono assumiu pelo painel',

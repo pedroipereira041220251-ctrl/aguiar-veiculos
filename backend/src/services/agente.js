@@ -289,7 +289,7 @@ Score 4 (contexto indicar "Score 4 atingido"):
 
 Score 5 (contexto indicar "Score 5: chame handoff"):
 → Chame handoff com motivo "score5" e um resumo completo da conversa.
-→ Escreva uma mensagem de passagem natural — mencione o veículo e o próximo passo. IMPORTANTE: o dono da loja usa este MESMO número de WhatsApp, então NÃO diga "nosso consultor vai te ligar" ou "entrará em contato" — ele já está aqui. Use algo como "vou te passar para o nosso consultor agora aqui mesmo" ou "nosso consultor segue contigo por aqui". Não use frases de despedida definitiva como "Até mais!", "Foi um prazer", "Tchau".
+→ Escreva uma mensagem de encerramento natural — mencione o veículo e o próximo passo. IMPORTANTE: NÃO diga que vai passar para um consultor, que alguém vai entrar em contato, ou qualquer variante disso. Use o tom de quem vai verificar as condições internamente e já retorna: "deixa eu organizar tudo aqui e já te retorno com mais detalhes" ou "vou analisar as condições e retorno em breve". A mensagem deve soar como uma pausa natural, não como uma despedida nem como transferência. Não use frases de despedida definitiva como "Até mais!", "Foi um prazer", "Tchau".
 
 HANDOFF só é acionado em 3 situações exatas:
 1. Score 5 atingido (capacidade financeira confirmada) — o contexto indicará.
@@ -721,6 +721,7 @@ async function extrairEhSalvarDados(textoCliente, lead, veiculosExibidos = []) {
   "vou pagar à vista", "prefiro à vista", "quero pagar à vista", "pago à vista" → forma_pagamento = "à vista", capacidade_financeira = null (escolher pagar à vista NÃO confirma que já tem o dinheiro)
   capacidade_financeira = "a_vista_confirmado" SOMENTE quando diz explicitamente que JÁ TEM: "tenho o dinheiro", "já tenho o valor todo", "o dinheiro já está disponível"
   Exemplos: "vou pagar à vista" → null | "tenho o dinheiro" → a_vista_confirmado | "já tenho o valor todo" → a_vista_confirmado | "tenho mais da metade" → sem_informacao | "estou juntando" → sem_informacao | "quase tenho" → sem_informacao
+- capacidade_observacao: string | null — frase curta e natural (em português) descrevendo o que o cliente disse sobre sua situação financeira. Preencher SOMENTE quando capacidade_financeira = "sem_informacao" (ou seja, quando tem parte mas não tudo). Exemplos: "Tem mais da metade do valor", "Ainda está juntando o restante", "Precisa vender o carro atual antes", "Quase tem o valor total". Quando capacidade_financeira for null ou confirmada (carta_aprovada / a_vista_confirmado) → retornar null.
 - veiculo_confirmado_id: string UUID | null${veiculosCtx}`,
         },
         { role: 'user', content: textoCliente },
@@ -739,6 +740,7 @@ async function extrairEhSalvarDados(textoCliente, lead, veiculosExibidos = []) {
   if (dados.prazo_compra)                 payload.prazo_compra     = dados.prazo_compra;
   const podeCapacidade = !lead.capacidade_financeira || lead.capacidade_financeira === 'sem_informacao';
   if (dados.capacidade_financeira && podeCapacidade) payload.capacidade_financeira = dados.capacidade_financeira;
+  if (dados.capacidade_observacao && podeCapacidade) payload.capacidade_observacao = dados.capacidade_observacao;
   if (dados.veiculo_confirmado_id && !lead.veiculo_interesse_id) payload.veiculo_interesse_id = dados.veiculo_confirmado_id;
 
   if (!Object.keys(payload).length) {

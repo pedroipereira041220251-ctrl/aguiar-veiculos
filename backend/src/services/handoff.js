@@ -86,7 +86,9 @@ export async function notificarScore4(leadId, resumo) {
     `📞 Contato: ${lead.contato}`,
     `🚗 Interesse: ${veiculoLabel(lead)}`,
     `💳 Pagamento: ${lead.forma_pagamento || '—'}`,
-    capacidadeConfirmada ? `💰 Capacidade: ${capacidadeLabel(lead.capacidade_financeira, lead.forma_pagamento)}` : null,
+    capacidadeConfirmada
+      ? `💰 Capacidade: ${capacidadeLabel(lead.capacidade_financeira, lead.forma_pagamento)}`
+      : lead.capacidade_observacao ? `💰 Capacidade: ${lead.capacidade_observacao}` : null,
     `📅 Prazo: ${lead.prazo_compra || '—'}`,
     '',
     `📝 Resumo:\n${montarResumoNarrativoScore4(lead)}`,
@@ -166,6 +168,8 @@ function montarResumoNarrativoScore4(lead) {
   const capacidadeConfirmada = ['carta_aprovada', 'a_vista_confirmado', 'comprovante_renda'].includes(lead.capacidade_financeira);
   if (capacidadeConfirmada) {
     partes.push(`Capacidade financeira: ${capacidadeLabel(lead.capacidade_financeira, pagamento)}.`);
+  } else if (lead.capacidade_observacao) {
+    partes.push(`Situação financeira: ${lead.capacidade_observacao}.`);
   }
 
   return partes.join(' ');

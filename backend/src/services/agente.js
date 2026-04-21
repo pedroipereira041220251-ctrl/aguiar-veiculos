@@ -101,34 +101,48 @@ async function processarComIA({ contato, canal, mensagens, body, lead_id, imageU
 
   // ── Tratamento de fotos (Fase 2) ──────────────────────────
   if (imageUrls.length > 0) {
+    const fotosVeiculo = [];
+    const ctxMensagens = [];
+
     for (const imageUrl of imageUrls) {
       const { isVeiculo, dados, descricao } = await analisarImagem(imageUrl);
 
       if (isVeiculo) {
-        // Salvar URL da última foto no lead
-        await supabase.from('leads').update({ foto_entrada_url: imageUrl }).eq('id', lead.id);
-
-        // Notificar dono (WA + Telegram) — sem handoff, conversa continua
-        await notificarFotoEntrada({
-          fotoUrl:        imageUrl,
-          modelo:         dados.modelo || null,
-          ano:            dados.ano_estimado || null,
-          km:             null,
-          condicao:       dados.condicao || null,
-          contatoCliente: contato,
-        }).catch(err => console.error('[agente/foto] notificar:', err.message));
-
-        // Adicionar ao contexto para o GPT responder naturalmente (sem opinar no veículo)
-        const ctx = descricao
-          ? `[Cliente enviou foto de veículo para entrada: ${descricao}. Dono já foi notificado. NÃO opine sobre o estado ou valor do veículo. Apenas confirme que a foto foi recebida e continue a conversa normalmente.]`
-          : '[Cliente enviou foto de veículo para entrada. Dono já foi notificado. NÃO opine sobre o veículo. Continue a conversa normalmente.]';
-        mensagens = [...(mensagens || []), ctx];
+        fotosVeiculo.push({ imageUrl, dados, descricao });
+        // Não notifica ainda — Ana vai perguntar ano e km primeiro
+        const ctx = `[Foto de veículo recebida: ${descricao || dados.modelo || 'veículo'}. NÃO notifique o dono ainda. Pergunte ao cliente o ano e a quilometragem antes de registrar.]`;
+        ctxMensagens.push(ctx);
       } else {
-        // Não é veículo → adiciona descrição ao contexto e GPT responde normalmente
         const descMsg = descricao ? `[Cliente enviou uma foto: ${descricao}]` : '[Cliente enviou uma foto]';
-        mensagens = [...(mensagens || []), descMsg];
+        ctxMensagens.push(descMsg);
       }
     }
+
+    // Bloco de contexto com URLs e dados detectados para o GPT usar ao chamar registrar_veiculo_entrada
+    if (fotosVeiculo.length > 0) {
+      const linhasFotos = fotosVeiculo.map((f, i) => {
+        const partes = [`Foto ${i + 1}: URL=${f.imageUrl}`];
+        if (f.dados.modelo) partes.push(`Modelo detectado: ${f.dados.modelo}`);
+        if (f.dados.cor)    partes.push(`Cor: ${f.dados.cor}`);
+        if (f.dados.condicao) partes.push(`Condição: ${f.dados.condicao}`);
+        return `  - ${partes.join(' | ')}`;
+      }).join('\n');
+
+      // Detectar se todas as fotos parecem ser do mesmo veículo (mesmo modelo detectado)
+      const modelos = [...new Set(fotosVeiculo.map(f => f.dados.modelo).filter(Boolean))];
+      const mesmoCarro = fotosVeiculo.length > 1 && modelos.length <= 1;
+
+      const nomes = fotosVeiculo.map(f => f.dados.modelo || 'veículo').join(' e ');
+      const instrucaoRegistro = mesmoCarro
+        ? `São fotos do MESMO veículo (${modelos[0] || 'veículo'}). Quando tiver as informações, chame registrar_veiculo_entrada UMA vez com foto_urls=[todas as URLs acima].`
+        : `Quando tiver as informações, chame registrar_veiculo_entrada ${fotosVeiculo.length > 1 ? 'para cada veículo separadamente' : 'com a URL acima'}.`;
+
+      ctxMensagens.push(
+        `[Fotos de veículo pendentes de registro:\n${linhasFotos}\nPergunte ao cliente o ano e a quilometragem ${fotosVeiculo.length > 1 && !mesmoCarro ? `de cada um (${nomes})` : `do ${nomes}`} em UMA só mensagem. ${instrucaoRegistro}]`
+      );
+    }
+
+    mensagens = [...(mensagens || []), ...ctxMensagens];
   }
 
   // 3. Carregar histórico
@@ -227,10 +241,13 @@ Colete, ao longo da conversa:
 1. Veículo de interesse (marca, modelo, ano ou características desejadas)
 2. Prazo de compra + forma de pagamento — pergunte os dois juntos logo após o cliente confirmar o veículo. Ex: "Para organizar aqui do nosso lado: qual é o seu prazo para comprar, e você prefere financiar ou pagar à vista?"
 3. Visita à loja — SEMPRE proponha uma visita ANTES de perguntar sobre capacidade financeira. Ex: "Que tal você passar aqui para ver o carro pessoalmente? Fica muito mais fácil de fechar. Você teria disponibilidade essa semana?" Não espere o cliente pedir.
+   BLOQUEIO: só proponha a visita após ter coletado prazo_compra E forma_pagamento. Se o cliente confirmou o veículo mas ainda não informou prazo ou pagamento, pergunte esses dois juntos primeiro. Nunca pule para a visita direto do passo 1.
    - Quando o cliente aceitar a visita ("pode ser", "sim", "topo", "combinado"), SEMPRE pergunte o dia e horário: "Que dia e horário ficam melhor pra você?" ou use fechamento alternativo "você prefere amanhã de manhã ou à tarde?". Nunca confirme a visita sem definir dia e hora.
 4. Capacidade financeira — pergunte SOMENTE depois de ter proposto a visita:
    - Se financiamento: "você já tem carta de crédito aprovada ou ainda vai buscar?"
    - Se à vista: "você já tem o valor disponível?"
+5. Carro de entrada: se o cliente mencionar que vai dar um carro como entrada ("tenho um carro pra dar", "quero trocar meu carro", "vou dar de entrada", "dou meu carro de entrada"), pergunte imediatamente: "Que tal você me mandar umas fotos do seu carro aqui? Assim a gente já consegue fazer uma avaliação inicial." Faça isso UMA vez — se o cliente já enviou foto, não repita.
+6. Ao receber fotos de veículo, o contexto indicará um bloco com as URLs e modelos detectados. Pergunte ao cliente o ano e a quilometragem de cada veículo em UMA só mensagem. Ex: "Recebi as fotos. Qual o ano e a quilometragem do Gol e do Mobi?" Quando o cliente informar os dados: se as fotos forem do MESMO veículo, chame registrar_veiculo_entrada UMA vez passando TODAS as URLs no campo foto_urls (array). Se forem veículos claramente diferentes, chame uma vez por veículo com a URL correspondente. Após registrar_veiculo_entrada retornar sucesso, NÃO chame handoff. Continue a conversa normalmente. Diga brevemente ao cliente que as fotos foram recebidas e o veículo será avaliado pela nossa equipe. Não opine sobre valor, condição ou preço do carro dele.
 
 Antes de consultar o estoque, o cliente DEVE ter informado pelo menos a faixa de preço. Marca ou tipo sozinhos não são filtro suficiente para listar.
 Regra: se o cliente não informou faixa de preço → SEMPRE pergunte antes de listar. Pergunte também o ano preferido se não foi mencionado. Faça no máximo 2 perguntas de uma vez.
@@ -245,8 +262,8 @@ Tom e estilo:
 - PROIBIÇÃO ABSOLUTA DE FORMATAÇÃO: NUNCA use asteriscos (*texto*), underline (_texto_), traço (-) para listas, numeração com ponto (1. item), ou qualquer markdown. Isso é WhatsApp, não documento. Ao apresentar múltiplos veículos, escreva em texto corrido separando com ponto e vírgula, ou em parágrafos sem marcadores.
 - Emojis: PROIBIDO em toda e qualquer mensagem. Sem exceções.
 - PROIBIÇÃO ABSOLUTA DE FRASES DE VENDEDOR GENÉRICO — esta regra está acima de qualquer outra: NUNCA inicie ou inclua numa frase as palavras "Ótima", "Ótimo", "Perfeito", "Excelente", "Claro!", "Certamente", "Com prazer". São marcas de robô e destroem a credibilidade. Exemplos de substituição: em vez de "Ótima escolha!" → "O Civic realmente é uma boa pedida —"; em vez de "Perfeito!" → "Combinado —" ou vá direto ao próximo passo; em vez de "Ótimo, Lucas!" → comece direto com o que vem a seguir.
-- NUNCA use: "me avisa!", "me avisa aqui", "é só me chamar!", "é só me falar!", "é só me avisar!", "estou à disposição", "qualquer dúvida estou à disposição", "qualquer dúvida pode falar", "nos vemos lá!", "te esperamos lá!", "Não se preocupe", "Sem problemas", "Se mudar de ideia", "Se tiver mais alguma dúvida", "pode falar!", "Podemos tentar ajustar os critérios".
-- NUNCA encerre com despedida temporal ou de chegada: "Até segunda!", "Até amanhã!", "Até lá!", "Até breve!", "Nos vemos às X horas!", "Nos vemos lá!", "Te esperamos hoje!", "Te espero às Xh!". Mesmo após confirmar agendamento, encerre com continuidade: "Qualquer coisa me fala aqui antes de chegar." ou "Se precisar de algo antes, é só falar."
+- NUNCA use: "me avisa!", "me avisa aqui", "é só me chamar!", "é só me falar!", "é só me avisar!", "é só falar", "pode falar comigo quando quiser", "estou à disposição", "qualquer dúvida estou à disposição", "qualquer dúvida pode falar", "nos vemos lá!", "te esperamos lá!", "Não se preocupe", "Sem problemas", "Se mudar de ideia", "Se tiver mais alguma dúvida", "pode falar!", "Podemos tentar ajustar os critérios".
+- NUNCA encerre com despedida temporal ou de chegada: "Até segunda!", "Até amanhã!", "Até lá!", "Até breve!", "Nos vemos às X horas!", "Nos vemos lá!", "Te esperamos hoje!", "Te espero às Xh!". Mesmo após confirmar agendamento, NÃO use frases de encerramento — mantenha a conversa viva com uma pergunta. Ex: "Você sabe como chegar até nós?" ou "Quer que eu te mande o endereço aqui?"
 - Quando não tem o veículo: seja breve e direta. Ex: "Não temos SUV 2022+ até 90k agora. O que você mais valoriza num SUV?" — sem parágrafos explicando o que não tem.
 - Nunca termine uma mensagem com frase de encerramento. Sempre termine com uma pergunta que avança a conversa ou um convite à ação.
 - Para destacar algo use *asterisco simples* — o WhatsApp não renderiza **duplo**. Nunca use listas numeradas com markdown.
@@ -283,7 +300,7 @@ Regras importantes:
 - O sistema salva automaticamente forma de pagamento, prazo e capacidade financeira a partir das mensagens. Você precisa chamar ferramentas apenas para:
   - registrar_nome(nome): assim que o cliente disser o nome
   - confirmar_interesse(veiculo_interesse_id): quando o cliente confirmar um veículo específico
-  - handoff: quando score 5, cliente pedir humano, ou foto de entrada
+  - handoff: quando score 5 ou cliente pedir humano
   - mover_lead(status_funil): mova o lead no CRM conforme o progresso da conversa:
     - 'contato': cliente respondeu e está em conversa ativa (padrão inicial após primeiro contato real)
     - 'visita': cliente confirmar que vai passar na loja ou agendou visita ("vou sim", "pode ser amanhã", "combinado")
@@ -303,13 +320,12 @@ Score 5 (contexto indicar "Score 5: chame handoff"):
 → Chame handoff com motivo "score5" e um resumo completo da conversa.
 → Escreva uma mensagem de encerramento natural — mencione o veículo e o próximo passo. IMPORTANTE: NÃO diga que vai passar para um consultor, que alguém vai entrar em contato, ou qualquer variante disso. Use o tom de quem vai verificar as condições internamente e já retorna: "deixa eu organizar tudo aqui e já te retorno com mais detalhes" ou "vou analisar as condições e retorno em breve". A mensagem deve soar como uma pausa natural, não como uma despedida nem como transferência. Não use frases de despedida definitiva como "Até mais!", "Foi um prazer", "Tchau".
 
-HANDOFF só é acionado em 3 situações exatas:
+HANDOFF só é acionado em 2 situações exatas:
 1. Score 5 atingido (capacidade financeira confirmada) — o contexto indicará.
 2. Cliente pede EXPLICITAMENTE falar com humano/vendedor/atendente — palavras como "falar com alguém", "quero um vendedor", "me passa para um humano".
    → IMPORTANTE: acione o handoff IMEDIATAMENTE, mesmo que seja a primeira mensagem, mesmo sem ter coletado nome ou veículo. Não tente engajar nem perguntar nada antes — o pedido do cliente é claro.
    → Mensagem para este caso: inicie com saudação temporal se for o primeiro contato (Bom dia / Boa tarde / Boa noite), depois uma frase curta e calorosa reconhecendo o pedido. Ex: "Boa tarde! Entendido — um momento que já te atendemos aqui." ou "Boa tarde! Claro, fica à vontade — já te passo." NÃO use a mensagem de "deixa eu organizar e retorno" — essa é exclusiva do score 5.
-3. Cliente enviou foto de veículo para entrada (tratado automaticamente pelo sistema).
-Agendar visita, dizer "pode ser", concordar com horário — NADA disso é handoff. Siga a conversa normalmente.
+Agendar visita, dizer "pode ser", concordar com horário, enviar foto — NADA disso é handoff. Siga a conversa normalmente.
 
 Score de qualificação (referência):
 1 = Apenas curiosidade, sem informações
@@ -386,11 +402,11 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'handoff',
-      description: 'Transfere o atendimento DEFINITIVAMENTE para o dono — o agente para de responder. Use APENAS em 3 casos: (1) score 5 atingido com capacidade_financeira confirmada (carta_aprovada ou a_vista_confirmado), (2) cliente pediu EXPLICITAMENTE falar com humano/vendedor, (3) cliente enviou foto de veículo para entrada. NUNCA use ao atingir score 4 — use notificar_score4 nesse caso.',
+      description: 'Transfere o atendimento DEFINITIVAMENTE para o dono — o agente para de responder. Use APENAS em 2 casos: (1) score 5 atingido com capacidade_financeira confirmada (carta_aprovada ou a_vista_confirmado), (2) cliente pediu EXPLICITAMENTE falar com humano/vendedor. NUNCA use ao atingir score 4 — use notificar_score4 nesse caso.',
       parameters: {
         type: 'object',
         properties: {
-          motivo:                { type: 'string', enum: ['score5', 'pedido_cliente', 'foto_entrada', 'assumido_painel'] },
+          motivo:                { type: 'string', enum: ['score5', 'pedido_cliente', 'assumido_painel'] },
           resumo:                { type: 'string', description: 'Resumo completo da conversa para o dono' },
           veiculo_interesse_id:  { type: 'string', description: 'UUID do veículo de interesse (id retornado pelo consultar_estoque)' },
           forma_pagamento:       { type: 'string', enum: ['financiamento', 'à vista'] },
@@ -427,42 +443,22 @@ const TOOLS = [
       },
     },
   },
-  // Stubs para Fase 2
   {
     type: 'function',
     function: {
-      name: 'registrar_foto_entrada',
-      description: '[Fase 2] Registra foto de veículo de entrada enviada pelo cliente',
+      name: 'registrar_veiculo_entrada',
+      description: 'Registra um veículo de entrada do cliente com dados completos e notifica o dono. Se o cliente enviou múltiplas fotos do MESMO veículo, passe todas as URLs em foto_urls (array). Se forem veículos diferentes, chame uma vez por veículo. Só chame após ter ano E quilometragem confirmados pelo cliente.',
       parameters: {
         type: 'object',
         properties: {
-          lead_id:   { type: 'string' },
-          foto_url:  { type: 'string' },
-          modelo:    { type: 'string' },
-          ano:       { type: 'integer' },
-          km:        { type: 'integer' },
-          condicao:  { type: 'string' },
+          foto_url:  { type: 'string',  description: 'URL da foto do veículo (use quando há apenas uma foto)' },
+          foto_urls: { type: 'array', items: { type: 'string' }, description: 'URLs de TODAS as fotos do mesmo veículo (use quando o cliente enviou múltiplas fotos do mesmo carro)' },
+          modelo:    { type: 'string',  description: 'Marca e modelo do veículo (ex: Volkswagen Gol)' },
+          cor:       { type: 'string',  description: 'Cor do veículo' },
+          ano:       { type: 'integer', description: 'Ano informado pelo cliente' },
+          km:        { type: 'integer', description: 'Quilometragem informada pelo cliente' },
         },
-        required: ['lead_id', 'foto_url'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'notificar_dono_entrada',
-      description: '[Fase 2] Envia foto de entrada ao dono via WhatsApp e Telegram',
-      parameters: {
-        type: 'object',
-        properties: {
-          foto_url:        { type: 'string' },
-          modelo:          { type: 'string' },
-          ano:             { type: 'integer' },
-          km:              { type: 'integer' },
-          condicao:        { type: 'string' },
-          contato_cliente: { type: 'string' },
-        },
-        required: ['foto_url', 'contato_cliente'],
+        required: ['modelo', 'ano', 'km'],
       },
     },
   },
@@ -666,23 +662,40 @@ async function executarTool(nome, args, lead, contato, canal) {
         return { ok: true };
       }
 
-      case 'registrar_foto_entrada': {
-        if (lead?.id && args.foto_url) {
-          await supabase.from('leads').update({ foto_entrada_url: args.foto_url }).eq('id', lead.id);
-        }
-        return { ok: true };
-      }
+      case 'registrar_veiculo_entrada': {
+        const { foto_url, foto_urls, modelo, cor, ano, km } = args;
 
-      case 'notificar_dono_entrada': {
+        // Validação obrigatória — não registrar sem ano e km confirmados
+        if (!ano || !km) {
+          return { erro: 'Pergunte ao cliente o ano e a quilometragem antes de registrar. Não chame esta tool sem esses dados.' };
+        }
+
+        // Consolidar URLs: foto_urls (array) tem prioridade, senão foto_url singular
+        const urlsConsolidadas = Array.isArray(foto_urls) && foto_urls.length > 0
+          ? foto_urls
+          : foto_url ? [foto_url] : [];
+
+        // Salvar no array jsonb do lead (uma entrada por registro, com todas as URLs)
+        if (lead?.id) {
+          const { data: leadAtual } = await supabase
+            .from('leads').select('foto_entrada_urls').eq('id', lead.id).single();
+          const lista = leadAtual?.foto_entrada_urls || [];
+          lista.push({ urls: urlsConsolidadas, url: urlsConsolidadas[0] || null, modelo, cor: cor || null, ano, km });
+          await supabase.from('leads').update({ foto_entrada_urls: lista }).eq('id', lead.id);
+        }
+
+        // Notificar dono com todas as fotos em uma única notificação
         await notificarFotoEntrada({
-          fotoUrl:        args.foto_url,
-          modelo:         args.modelo || null,
-          ano:            args.ano    || null,
-          km:             args.km     || null,
-          condicao:       args.condicao || null,
-          contatoCliente: args.contato_cliente || contato,
-        }).catch(err => console.error('[agente/tool:notificar_dono_entrada]', err.message));
-        return { ok: true };
+          fotoUrls:       urlsConsolidadas,
+          modelo,
+          cor:            cor || null,
+          ano,
+          km,
+          contatoCliente: contato,
+        }).catch(err => console.error('[agente/tool:registrar_veiculo_entrada]', err.message));
+
+        console.log('[tool:registrar_veiculo_entrada]', modelo, ano, km, '| fotos:', urlsConsolidadas.length);
+        return { sucesso: true };
       }
 
       default:

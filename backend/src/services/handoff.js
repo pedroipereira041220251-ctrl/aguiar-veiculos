@@ -123,32 +123,46 @@ export async function notificarCapacidadeAtualizada(lead) {
 // ── notificarFotoEntrada ───────────────────────────────────
 // Aviso de foto de entrada: vai para WhatsApp E Telegram (seção 8.1)
 // Chamado pelo agente antes do handoffAutomatico
-export async function notificarFotoEntrada({ fotoUrl, modelo, ano, km, condicao, contatoCliente }) {
+export async function notificarFotoEntrada({ fotoUrls, fotoUrl, modelo, cor, ano, km, contatoCliente }) {
+  // Suporte a fotoUrls (array) e fotoUrl (singular legado)
+  const urls = Array.isArray(fotoUrls) && fotoUrls.length > 0
+    ? fotoUrls
+    : fotoUrl ? [fotoUrl] : [];
+
+  const veiculo = [modelo, cor, ano ? String(ano) : null].filter(Boolean).join(' ');
+  const qtdFotos = urls.length > 1 ? ` (${urls.length} fotos)` : '';
   const msg = [
-    '📸 *Foto de veículo de entrada recebida*',
+    '📸 *Veículo de entrada recebido*',
     '',
     `👤 Cliente: ${contatoCliente}`,
-    `🚗 Veículo: ${modelo || '?'} ${ano || '?'}`,
-    `📍 KM: ${km || '?'} · Condição: ${condicao || '?'}`,
+    `🚗 Veículo: ${veiculo || '?'}${qtdFotos}`,
+    `📍 KM: ${km ? Number(km).toLocaleString('pt-BR') : '?'} km`,
     '',
     '👉 Avalie e entre em contato para negociação.',
   ].join('\n');
 
-  // WhatsApp
+  // WhatsApp — 1 texto + todas as fotos em sequência
   try {
     await sendText(process.env.OWNER_PHONE_NUMBER, msg);
-    if (fotoUrl) {
+    if (urls.length > 0) {
       const { sendImage } = await import('./waClient.js');
-      await sendImage(process.env.OWNER_PHONE_NUMBER, fotoUrl, 'Veículo de entrada');
+      for (const url of urls) {
+        await sendImage(process.env.OWNER_PHONE_NUMBER, url, 'Veículo de entrada');
+      }
     }
   } catch (err) {
     console.error('[handoff/fotoEntrada] Erro WA:', err.message);
   }
 
-  // Telegram — importado dinamicamente para evitar dependência circular
+  // Telegram — 1 texto + todas as fotos em sequência
   try {
-    const { sendMessage: tgSend } = await import('./telegramClient.js');
+    const { sendMessage: tgSend, sendPhoto: tgPhoto } = await import('./telegramClient.js');
     await tgSend(process.env.TELEGRAM_OWNER_CHAT_ID, msg);
+    if (urls.length > 0 && tgPhoto) {
+      for (const url of urls) {
+        await tgPhoto(process.env.TELEGRAM_OWNER_CHAT_ID, url).catch(() => {});
+      }
+    }
   } catch (err) {
     console.error('[handoff/fotoEntrada] Erro Telegram:', err.message);
   }

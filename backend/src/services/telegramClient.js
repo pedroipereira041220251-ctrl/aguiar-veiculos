@@ -53,6 +53,14 @@ export async function editMessage(chatId, messageId, text, keyboard = null) {
   await b.editMessageText(text, opts);
 }
 
+// ── sendPhoto ─────────────────────────────────────────────
+// Envia uma foto por URL para um chat
+export async function sendPhoto(chatId, photoUrl, caption = '') {
+  const b = getBot();
+  if (!b) return;
+  await b.sendPhoto(chatId, photoUrl, caption ? { caption } : {});
+}
+
 // ── answerCallbackQuery ────────────────────────────────────
 // Confirma ao Telegram que o callback foi processado (remove loading spinner)
 export async function answerCallback(callbackQueryId, text = '') {

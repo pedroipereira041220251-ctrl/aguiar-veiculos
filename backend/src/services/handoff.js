@@ -123,7 +123,7 @@ export async function notificarCapacidadeAtualizada(lead) {
 // ── notificarFotoEntrada ───────────────────────────────────
 // Aviso de foto de entrada: vai para WhatsApp E Telegram (seção 8.1)
 // Chamado pelo agente antes do handoffAutomatico
-export async function notificarFotoEntrada({ fotoUrls, fotoUrl, modelo, cor, ano, km, contatoCliente }) {
+export async function notificarFotoEntrada({ fotoUrls, fotoUrl, modelo, cor, ano, km, nomeCliente, contatoCliente }) {
   // Suporte a fotoUrls (array) e fotoUrl (singular legado)
   const urls = Array.isArray(fotoUrls) && fotoUrls.length > 0
     ? fotoUrls
@@ -134,7 +134,7 @@ export async function notificarFotoEntrada({ fotoUrls, fotoUrl, modelo, cor, ano
   const msg = [
     '📸 *Veículo de entrada recebido*',
     '',
-    `👤 Cliente: ${contatoCliente}`,
+    `👤 Cliente: ${nomeCliente ? `${nomeCliente} (${contatoCliente})` : contatoCliente}`,
     `🚗 Veículo: ${veiculo || '?'}${qtdFotos}`,
     `📍 KM: ${km ? Number(km).toLocaleString('pt-BR') : '?'} km`,
     '',

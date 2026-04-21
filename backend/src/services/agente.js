@@ -243,6 +243,7 @@ Colete, ao longo da conversa:
 3. Visita à loja — SEMPRE proponha uma visita ANTES de perguntar sobre capacidade financeira. Ex: "Que tal você passar aqui para ver o carro pessoalmente? Fica muito mais fácil de fechar. Você teria disponibilidade essa semana?" Não espere o cliente pedir.
    BLOQUEIO: só proponha a visita após ter coletado prazo_compra E forma_pagamento. Se o cliente confirmou o veículo mas ainda não informou prazo ou pagamento, pergunte esses dois juntos primeiro. Nunca pule para a visita direto do passo 1. ATENÇÃO: receber fotos de veículo de entrada NÃO suspende este bloqueio — após registrar as fotos, volte imediatamente para coletar o dado que faltava (prazo ou forma_pagamento) antes de propor visita.
    - Quando o cliente aceitar a visita ("pode ser", "sim", "topo", "combinado"), SEMPRE pergunte o dia e horário: "Que dia e horário ficam melhor pra você?" ou use fechamento alternativo "você prefere amanhã de manhã ou à tarde?". Nunca confirme a visita sem definir dia e hora.
+   - Quando o cliente aceitar a visita E já informar dia E horário na mesma mensagem (ex: "vou passar às 14h hoje"), confirme o agendamento e pergunte a capacidade financeira IMEDIATAMENTE na mesma resposta — antes de endereço ou qualquer outra coisa.
 4. Capacidade financeira — pergunte SOMENTE depois de ter proposto a visita:
    - Se financiamento: "você já tem carta de crédito aprovada ou ainda vai buscar?"
    - Se à vista: "você já tem o valor disponível?"
@@ -309,7 +310,7 @@ Regras importantes:
     - 'visita': cliente confirmar que vai passar na loja ou agendou visita ("vou sim", "pode ser amanhã", "combinado")
     - 'proposta': veículo confirmado E prazo + pagamento definidos E negociando condições
     - 'perdido': cliente encerrar sem interesse ("não preciso mais", "já comprei em outro lugar", "desisti")
-- Quando o cliente confirmar interesse em um veículo específico (ex: "esse", "aquele", "Certinho", "gostei desse"), chame imediatamente confirmar_interesse com o veiculo_interesse_id do veículo confirmado (use o campo "id" retornado pelo consultar_estoque). Não espere o cliente confirmar nome do modelo — basta confirmar que é aquele.
+- Qualquer reação positiva do cliente ao veículo apresentado é confirmação de interesse — chame confirmar_interesse IMEDIATAMENTE. Gatilhos: "interessante", "me interessei", "bastante interessante", "gostei", "gostei muito", "achei bom", "bacana", "legal", "que bom", "adorei", "esse mesmo", "esse", "aquele", "certinho", ou qualquer variação positiva. Não espere o cliente repetir o nome do modelo nem dizer "quero comprar" — basta qualquer sinal de aprovação. Use o "id" retornado pelo consultar_estoque.
 
 REGRAS DE SCORE E HANDOFF — leia com atenção:
 
@@ -797,15 +798,16 @@ async function extrairEhSalvarDados(textoCliente, lead, veiculosExibidos = [], u
 // ─────────────────────────────────────────────────────────
 
 function computarScore(lead) {
-  if (!lead.veiculo_interesse_id) return 1;
+  const temVeiculo    = !!lead.veiculo_interesse_id;
   const temPrazo      = !!lead.prazo_compra;
   const temPagamento  = !!lead.forma_pagamento;
   const temCapacidade = ['carta_aprovada', 'a_vista_confirmado'].includes(lead.capacidade_financeira);
 
-  if (temPrazo && temPagamento && temCapacidade) return 5;
-  if (temPrazo && temPagamento)                  return 4;
-  if (temPrazo || temPagamento)                  return 3;
-  return 2;
+  if (temVeiculo && temPrazo && temPagamento && temCapacidade) return 5;
+  if (temVeiculo && temPrazo && temPagamento)                  return 4;
+  if (temPrazo && temPagamento)                                return 3;
+  if (temVeiculo || temPrazo || temPagamento)                  return 2;
+  return 1;
 }
 
 async function acionarScore(leadId, lead, prevScore) {

@@ -118,28 +118,63 @@ async function processarComIA({ contato, canal, mensagens, body, lead_id, imageU
       }
     }
 
-    // Bloco de contexto com URLs e dados detectados para o GPT usar ao chamar registrar_veiculo_entrada
+    // Agrupar fotos por veículo (opção B): por modelo detectado primeiro,
+    // fotos sem modelo associadas por cor somente se houver UM único grupo com aquela cor
     if (fotosVeiculo.length > 0) {
-      const linhasFotos = fotosVeiculo.map((f, i) => {
-        const partes = [`Foto ${i + 1}: URL=${f.imageUrl}`];
-        if (f.dados.modelo) partes.push(`Modelo detectado: ${f.dados.modelo}`);
-        if (f.dados.cor)    partes.push(`Cor: ${f.dados.cor}`);
-        if (f.dados.condicao) partes.push(`Condição: ${f.dados.condicao}`);
-        return `  - ${partes.join(' | ')}`;
-      }).join('\n');
+      const grupos  = new Map(); // chave normalizada → { nomeExibicao, cor, fotos[] }
+      const semModelo = [];
 
-      // Detectar se todas as fotos parecem ser do mesmo veículo (mesmo modelo detectado)
-      const modelos = [...new Set(fotosVeiculo.map(f => f.dados.modelo).filter(Boolean))];
-      const mesmoCarro = fotosVeiculo.length > 1 && modelos.length <= 1;
+      // 1ª passagem: agrupar por modelo
+      for (const foto of fotosVeiculo) {
+        const modeloNorm = foto.dados.modelo?.toLowerCase();
+        if (modeloNorm) {
+          if (!grupos.has(modeloNorm)) grupos.set(modeloNorm, { nomeExibicao: foto.dados.modelo, cor: foto.dados.cor, fotos: [] });
+          grupos.get(modeloNorm).fotos.push(foto);
+        } else {
+          semModelo.push(foto);
+        }
+      }
 
-      const nomes = fotosVeiculo.map(f => f.dados.modelo || 'veículo').join(' e ');
-      const instrucaoRegistro = mesmoCarro
-        ? `São fotos do MESMO veículo (${modelos[0] || 'veículo'}). Quando tiver as informações, chame registrar_veiculo_entrada UMA vez com foto_urls=[todas as URLs acima].`
-        : `Quando tiver as informações, chame registrar_veiculo_entrada ${fotosVeiculo.length > 1 ? 'para cada veículo separadamente' : 'com a URL acima'}.`;
+      // 2ª passagem: associar fotos sem modelo por cor (só se houver exatamente 1 grupo com aquela cor)
+      for (const foto of semModelo) {
+        const corNorm = foto.dados.cor?.toLowerCase();
+        const candidatos = corNorm
+          ? [...grupos.values()].filter(g => g.cor?.toLowerCase() === corNorm)
+          : [];
+        if (candidatos.length === 1) {
+          candidatos[0].fotos.push(foto);
+        } else {
+          const chave = `sem_modelo_${corNorm || grupos.size}`;
+          if (!grupos.has(chave)) grupos.set(chave, { nomeExibicao: foto.dados.cor || 'veículo', cor: foto.dados.cor, fotos: [] });
+          grupos.get(chave).fotos.push(foto);
+        }
+      }
 
-      ctxMensagens.push(
-        `[Fotos de veículo pendentes de registro:\n${linhasFotos}\nPergunte ao cliente o ano e a quilometragem ${fotosVeiculo.length > 1 && !mesmoCarro ? `de cada um (${nomes})` : `do ${nomes}`} em UMA só mensagem. ${instrucaoRegistro}]`
-      );
+      // Montar bloco de contexto por grupo
+      const blocoLinhas = [];
+      const nomeGrupos  = [];
+      let grupoIdx = 0;
+
+      for (const [, grupo] of grupos) {
+        grupoIdx++;
+        const label = grupo.nomeExibicao || 'veículo';
+        nomeGrupos.push(label);
+        const urls   = grupo.fotos.map(f => f.imageUrl);
+        const corStr = grupo.cor ? ` | Cor: ${grupo.cor}` : '';
+        const condStr = grupo.fotos[0]?.dados?.condicao ? ` | Condição: ${grupo.fotos[0].dados.condicao}` : '';
+        if (urls.length === 1) {
+          blocoLinhas.push(`  - Veículo ${grupoIdx} (${label}): URL=${urls[0]}${corStr}${condStr}`);
+        } else {
+          blocoLinhas.push(`  - Veículo ${grupoIdx} (${label}): ${urls.length} fotos — foto_urls=[${urls.map(u => `"${u}"`).join(', ')}]${corStr}${condStr} → chame registrar_veiculo_entrada UMA vez com essas URLs`);
+        }
+      }
+
+      const qtdGrupos = grupos.size;
+      const instrucao = qtdGrupos === 1
+        ? `Pergunte o ano e a quilometragem do ${nomeGrupos[0]} em UMA mensagem. Chame registrar_veiculo_entrada UMA vez${[...grupos.values()][0].fotos.length > 1 ? ' com foto_urls=[todas as URLs do grupo]' : ''}.`
+        : `Pergunte o ano e a quilometragem de cada veículo em UMA mensagem (${nomeGrupos.join(' e ')}). Chame registrar_veiculo_entrada UMA vez por veículo usando as foto_urls do grupo correspondente.`;
+
+      ctxMensagens.push(`[Fotos de veículo pendentes de registro:\n${blocoLinhas.join('\n')}\n${instrucao}]`);
     }
 
     mensagens = [...(mensagens || []), ...ctxMensagens];
@@ -239,7 +274,7 @@ Exemplos:
 Colete, ao longo da conversa:
 0. Nome do cliente — colete ao longo da conversa, no momento mais natural. Assim que o cliente informar o nome, chame imediatamente registrar_nome(nome). Nunca feche proposta ou avance para handoff sem ter o nome.
 1. Veículo de interesse (marca, modelo, ano ou características desejadas)
-2. Prazo de compra + forma de pagamento — pergunte os dois juntos logo após o cliente confirmar o veículo. Ex: "Para organizar aqui do nosso lado: qual é o seu prazo para comprar, e você prefere financiar ou pagar à vista?"
+2. Prazo de compra + forma de pagamento — pergunte os dois juntos logo após o cliente demonstrar INTERESSE no veículo (reagir positivamente). Fluxo correto: apresente o veículo → pergunte "O que achou?" ou "Tem interesse?" → aguarde reação positiva → só então pergunte prazo e pagamento juntos. NUNCA pergunte prazo e pagamento na mesma mensagem em que apresenta o veículo pela primeira vez. Ex de reações positivas que disparam a pergunta: "interessante", "gostei", "me interessei", "achei bom", "bacana".
 3. Visita à loja — SEMPRE proponha uma visita ANTES de perguntar sobre capacidade financeira. Ex: "Que tal você passar aqui para ver o carro pessoalmente? Fica muito mais fácil de fechar. Você teria disponibilidade essa semana?" Não espere o cliente pedir.
    BLOQUEIO: só proponha a visita após ter coletado prazo_compra E forma_pagamento. Se o cliente confirmou o veículo mas ainda não informou prazo ou pagamento, pergunte esses dois juntos primeiro. Nunca pule para a visita direto do passo 1. ATENÇÃO: receber fotos de veículo de entrada NÃO suspende este bloqueio — após registrar as fotos, volte imediatamente para coletar o dado que faltava (prazo ou forma_pagamento) antes de propor visita.
    - Quando o cliente aceitar a visita ("pode ser", "sim", "topo", "combinado"), SEMPRE pergunte o dia e horário: "Que dia e horário ficam melhor pra você?" ou use fechamento alternativo "você prefere amanhã de manhã ou à tarde?". Nunca confirme a visita sem definir dia e hora.

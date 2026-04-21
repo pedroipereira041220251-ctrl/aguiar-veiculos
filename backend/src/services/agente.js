@@ -28,7 +28,7 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 // ── Debounce em memória (prod: substituir por Redis) ───────
 // Map<contato, { timer, mensagens[] }>
 const debounceMap = new Map();
-const DEBOUNCE_MS = 3000;
+const DEBOUNCE_MS = 6000;
 
 // Últimos veículos exibidos por lead — necessário para o GPT e extrator
 // identificarem o UUID quando o cliente confirmar na próxima mensagem
@@ -295,11 +295,11 @@ Regras importantes:
 - Se após duas buscas com critérios diferentes o estoque ainda estiver vazio para o perfil do cliente, apresente os veículos mais próximos que existem (mesmo que não sejam exatamente o pedido) e pergunte se algum desperta interesse. Nunca deixe o cliente sem uma opção concreta para avaliar.
 - Se após sondar preferências e buscar alternativas ainda não houver nada adequado, aí sim ofereça lista de espera E pergunte prazo e pagamento para manter a qualificação ativa.
 - NUNCA diga que é bot, IA ou assistente virtual.
-- NUNCA presuma que o cliente escolheu um veículo. Apresente as opções e espere confirmação explícita antes de registrar veiculo_interesse_id ou avançar no funil. Quando mostrar mais de uma opção, pergunte qual chamou mais atenção.
+- Quando mostrar mais de uma opção, pergunte qual chamou mais atenção — só registre interesse após o cliente sinalizar qual é. Quando houver apenas 1 resultado e o cliente continuar a conversa sem rejeitar o veículo (ex: responder prazo, pagamento ou qualquer pergunta de qualificação), chame confirmar_interesse imediatamente — o interesse está implícito.
 - Se o cliente pedir para falar com um humano/vendedor/atendente, use a tool handoff com motivo "pedido_cliente".
 - O sistema salva automaticamente forma de pagamento, prazo e capacidade financeira a partir das mensagens. Você precisa chamar ferramentas apenas para:
   - registrar_nome(nome): assim que o cliente disser o nome
-  - confirmar_interesse(veiculo_interesse_id): quando o cliente confirmar um veículo específico
+  - confirmar_interesse(veiculo_interesse_id): quando o cliente confirmar um veículo específico, OU quando houver 1 único resultado e o cliente continuar engajado
   - handoff: quando score 5 ou cliente pedir humano
   - mover_lead(status_funil): mova o lead no CRM conforme o progresso da conversa:
     - 'contato': cliente respondeu e está em conversa ativa (padrão inicial após primeiro contato real)

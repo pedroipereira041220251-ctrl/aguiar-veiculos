@@ -147,7 +147,7 @@ export async function notificarFotoEntrada({ fotoUrls, fotoUrl, modelo, cor, ano
     if (urls.length > 0) {
       const { sendImage } = await import('./waClient.js');
       for (const url of urls) {
-        await sendImage(process.env.OWNER_PHONE_NUMBER, url, 'Veículo de entrada');
+        await sendImage(process.env.OWNER_PHONE_NUMBER, url, '');
       }
     }
   } catch (err) {

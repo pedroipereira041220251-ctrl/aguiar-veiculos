@@ -139,7 +139,7 @@ async function processarComIA({ contato, canal, mensagens, body, lead_id, imageU
       for (const foto of semModelo) {
         const corNorm = foto.dados.cor?.toLowerCase();
         const candidatos = corNorm
-          ? [...grupos.values()].filter(g => g.cor?.toLowerCase() === corNorm)
+          ? [...grupos.values()].filter(g => g.cor?.toLowerCase().slice(0, 5) === corNorm.slice(0, 5))
           : [];
         if (candidatos.length === 1) {
           candidatos[0].fotos.push(foto);

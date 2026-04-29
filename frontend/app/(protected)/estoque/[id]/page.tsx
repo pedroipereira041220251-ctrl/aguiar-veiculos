@@ -725,10 +725,10 @@ export default function VeiculoDetailPage() {
 
 function FinCard({ label, value, green }: { label: string; value: string; green?: number }) {
   return (
-    <div className="bg-white/5 border border-border rounded-xl p-4 text-center">
-      <p className="text-2xs font-semibold text-text-dim uppercase tracking-widest mb-1.5">{label}</p>
+    <div className="bg-white/5 border border-border rounded-xl p-2.5 md:p-4 text-center">
+      <p className="text-[9px] md:text-2xs font-semibold text-text-dim uppercase tracking-widest mb-1 leading-tight">{label}</p>
       <p className={cn(
-        'text-sm font-bold font-mono',
+        'text-[11px] md:text-sm font-bold font-mono leading-tight',
         green === undefined ? 'text-text-primary' : green >= 0 ? 'text-green-400' : 'text-red-400',
       )}>
         {value}

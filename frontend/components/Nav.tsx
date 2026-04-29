@@ -24,11 +24,12 @@ const systemLinks = [
 ];
 
 const mobileLinks = [
-  { href: '/dashboard',  label: 'Painel',   icon: LayoutDashboard },
-  { href: '/estoque',    label: 'Estoque',  icon: Car },
-  { href: '/crm',        label: 'CRM',      icon: Users },
-  { href: '/alertas',    label: 'Alertas',  icon: Bell },
-  { href: '/financeiro', label: 'Finanças', icon: DollarSign },
+  { href: '/dashboard',  label: 'Painel',    icon: LayoutDashboard },
+  { href: '/estoque',    label: 'Estoque',   icon: Car },
+  { href: '/crm',        label: 'CRM',       icon: Users },
+  { href: '/alertas',    label: 'Alertas',   icon: Bell },
+  { href: '/financeiro', label: 'Finanças',  icon: DollarSign },
+  { href: '/vendedores', label: 'Vendedores', icon: UserCheck },
 ];
 
 export default function Nav() {
@@ -139,12 +140,12 @@ export default function Nav() {
                 key={href}
                 href={href}
                 className={cn(
-                  'flex-1 flex flex-col items-center justify-center pt-3 pb-4 gap-1 transition-colors min-w-0',
+                  'flex-1 flex flex-col items-center justify-center pt-2.5 pb-3 gap-0.5 transition-colors min-w-0',
                   active ? 'text-primary' : 'text-text-muted',
                 )}
               >
-                <Icon size={20} strokeWidth={active ? 2.2 : 1.8} />
-                <span className="text-[10px] font-medium truncate">{label}</span>
+                <Icon size={18} strokeWidth={active ? 2.2 : 1.8} />
+                <span className="text-[9px] font-medium truncate w-full text-center px-0.5">{label}</span>
               </Link>
             );
           })}

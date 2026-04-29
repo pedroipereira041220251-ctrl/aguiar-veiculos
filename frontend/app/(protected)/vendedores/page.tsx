@@ -172,19 +172,19 @@ export default function VendedoresPage() {
         {tab === 'ranking' && (
           <>
             {/* Seletor de mês */}
-            <div className="flex items-center justify-between">
-              <div className="chapter-heading mb-0">
+            <div className="flex items-center justify-between gap-3">
+              <div className="chapter-heading mb-0 hidden sm:flex">
                 <span className="chapter-bar bg-yellow-400" />
                 <span className="chapter-title capitalize">{mesLabel(mes)}</span>
               </div>
-              <div className="flex items-center gap-1.5 bg-card border border-border rounded-xl p-1">
+              <div className="flex items-center gap-1 bg-card border border-border rounded-xl p-1 mx-auto sm:mx-0">
                 <button
                   onClick={() => setMes(mesAnterior(mes))}
                   className="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-white/5 transition-colors"
                 >
                   <ChevronLeft size={15} />
                 </button>
-                <span className="text-xs font-semibold text-text-primary px-2 min-w-[130px] text-center capitalize">
+                <span className="text-xs font-semibold text-text-primary px-2 min-w-[120px] text-center capitalize">
                   {mesLabel(mes)}
                 </span>
                 <button
@@ -210,11 +210,11 @@ export default function VendedoresPage() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-border">
-                      <th className="tbl-th w-10">#</th>
+                      <th className="tbl-th w-8">#</th>
                       <th className="tbl-th">Vendedor</th>
                       <th className="tbl-th-right hidden sm:table-cell">Vendas</th>
                       <th className="tbl-th-right">Receita</th>
-                      <th className="tbl-th-right">Comissão</th>
+                      <th className="tbl-th-right hidden sm:table-cell">Comissão</th>
                       <th className="w-8" />
                     </tr>
                   </thead>
@@ -226,7 +226,7 @@ export default function VendedoresPage() {
                           onClick={() => toggleVendedor(v.nome_vendedor)}
                           className="hover:bg-white/[0.02] transition-colors cursor-pointer"
                         >
-                          <td className="px-4 py-3.5">
+                          <td className="px-2 md:px-4 py-2.5 md:py-3.5">
                             {i < 3 ? (
                               <span className={cn('text-sm font-bold', PODIUM_COLOR[i])}>
                                 {i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'}
@@ -235,31 +235,31 @@ export default function VendedoresPage() {
                               <span className="text-sm font-mono font-bold text-text-dim">{String(i + 1).padStart(2, '0')}</span>
                             )}
                           </td>
-                          <td className="px-4 py-3.5">
-                            <div className="flex items-center gap-3">
+                          <td className="px-2 md:px-4 py-2.5 md:py-3.5">
+                            <div className="flex items-center gap-2 md:gap-3">
                               <div className={cn(
-                                'w-8 h-8 rounded-full border flex items-center justify-center flex-shrink-0',
+                                'w-6 h-6 md:w-8 md:h-8 rounded-full border flex items-center justify-center flex-shrink-0',
                                 i < 3 ? PODIUM_BG[i] : 'bg-primary/10 border-primary/20',
                               )}>
                                 <span className={cn('text-xs font-bold', i < 3 ? PODIUM_COLOR[i] : 'text-primary')}>
                                   {v.nome_vendedor.charAt(0).toUpperCase()}
                                 </span>
                               </div>
-                              <p className="text-sm font-semibold text-text-primary">{v.nome_vendedor}</p>
+                              <p className="text-sm font-semibold text-text-primary truncate">{v.nome_vendedor}</p>
                             </div>
                           </td>
-                          <td className="px-4 py-3.5 text-right hidden sm:table-cell">
+                          <td className="px-2 md:px-4 py-2.5 md:py-3.5 text-right hidden sm:table-cell">
                             <span className="badge bg-white/5 border border-border text-text-muted">
                               {v.qtd_vendas} venda{v.qtd_vendas !== 1 ? 's' : ''}
                             </span>
                           </td>
-                          <td className="px-4 py-3.5 text-right">
-                            <p className="text-sm font-semibold font-mono text-green-400">{fmt(v.total_vendas)}</p>
+                          <td className="px-2 md:px-4 py-2.5 md:py-3.5 text-right">
+                            <p className="text-xs md:text-sm font-semibold font-mono text-green-400">{fmt(v.total_vendas)}</p>
                           </td>
-                          <td className="px-4 py-3.5 text-right">
+                          <td className="px-2 md:px-4 py-2.5 md:py-3.5 text-right hidden sm:table-cell">
                             <p className="text-sm font-bold font-mono text-primary">{fmt(v.comissao)}</p>
                           </td>
-                          <td className="pr-4 py-3.5 text-text-muted">
+                          <td className="pr-2 md:pr-4 py-2.5 md:py-3.5 text-text-muted">
                             {aberto === v.nome_vendedor ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                           </td>
                         </tr>
@@ -273,14 +273,13 @@ export default function VendedoresPage() {
                               ) : (
                                 <div className="divide-y divide-border">
                                   {(vendas[v.nome_vendedor] || []).map(venda => (
-                                    <div key={venda.id} className="flex items-center gap-4 px-5 py-2.5 hover:bg-white/[0.02] transition-colors">
-                                      <div className="w-5 flex-shrink-0" />
+                                    <div key={venda.id} className="flex items-center gap-2 md:gap-4 px-3 md:px-5 py-2 md:py-2.5 hover:bg-white/[0.02] transition-colors">
                                       <div className="flex-1 min-w-0">
                                         <p className="text-xs font-semibold text-text-primary truncate">{venda.modelo} {venda.ano}</p>
-                                        <p className="text-2xs font-mono text-text-muted">{venda.placa} · {venda.data_venda ? venda.data_venda.split('-').reverse().join('/') : '—'}</p>
+                                        <p className="text-2xs font-mono text-text-muted truncate">{venda.placa} · {venda.data_venda ? venda.data_venda.split('-').reverse().join('/') : '—'}</p>
                                       </div>
-                                      <p className="text-xs font-semibold font-mono text-green-400">{venda.preco_venda_final ? fmt(venda.preco_venda_final) : '—'}</p>
-                                      <p className={cn('text-xs font-bold font-mono', venda.comissao > 0 ? 'text-primary' : 'text-text-muted')}>
+                                      <p className="text-xs font-semibold font-mono text-green-400 flex-shrink-0">{venda.preco_venda_final ? fmt(venda.preco_venda_final) : '—'}</p>
+                                      <p className={cn('text-xs font-bold font-mono flex-shrink-0 hidden sm:block', venda.comissao > 0 ? 'text-primary' : 'text-text-muted')}>
                                         {venda.comissao > 0 ? fmt(venda.comissao) : '—'}
                                       </p>
                                     </div>
@@ -295,12 +294,12 @@ export default function VendedoresPage() {
                   </tbody>
                   <tfoot>
                     <tr className="border-t-2 border-border bg-white/[0.02]">
-                      <td colSpan={3} className="px-4 py-3 text-2xs font-bold text-text-muted uppercase tracking-widest hidden sm:table-cell">Total do período</td>
-                      <td colSpan={3} className="px-4 py-3 text-2xs font-bold text-text-muted uppercase tracking-widest sm:hidden">Total</td>
-                      <td className="px-4 py-3 text-right hidden sm:table-cell">
-                        <p className="text-sm font-bold font-mono text-green-400">{fmt(totalGeral)}</p>
+                      <td colSpan={3} className="px-2 md:px-4 py-2.5 md:py-3 text-2xs font-bold text-text-muted uppercase tracking-widest hidden sm:table-cell">Total do período</td>
+                      <td colSpan={3} className="px-2 py-2.5 text-2xs font-bold text-text-muted uppercase tracking-widest sm:hidden">Total</td>
+                      <td className="px-2 md:px-4 py-2.5 md:py-3 text-right">
+                        <p className="text-xs md:text-sm font-bold font-mono text-green-400">{fmt(totalGeral)}</p>
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-4 py-3 text-right hidden sm:table-cell">
                         <p className="text-sm font-bold font-mono text-primary">{fmt(comissaoGeral)}</p>
                       </td>
                       <td />

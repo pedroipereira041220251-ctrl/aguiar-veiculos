@@ -69,10 +69,15 @@ async function processarMensagem(body) {
   // Transcrever áudio via Whisper se não houver texto
   let texto = textoRaw;
   if (audioUrl && !textoRaw) {
+    console.log('[webhook] Áudio detectado, transcrevendo...', audioUrl?.slice(0, 60));
     const transcricao = await transcreverAudio(audioUrl);
     if (transcricao) {
       texto = transcricao;
       console.log('[webhook] Áudio transcrito:', texto.slice(0, 80));
+    } else {
+      console.warn('[webhook] Transcrição falhou — enviando fallback ao cliente:', phone);
+      await sendText(phone, 'Não consegui escutar o áudio. Pode me mandar em texto?').catch(() => {});
+      return;
     }
   }
 
@@ -140,10 +145,13 @@ async function rotearDono(phone, texto, body) {
 
 // ── rotearCliente ──────────────────────────────────────────
 async function rotearCliente(phone, texto, body, isStory, imageUrl = null) {
-  // Modo de teste: se TEST_CLIENT_PHONE estiver definido, ignora qualquer outro número
-  const testPhone = (process.env.TEST_CLIENT_PHONE || '').replace(/\D/g, '');
-  if (testPhone && phone.replace(/\D/g, '') !== testPhone) {
-    console.log('[rotearCliente] ignorado por TEST_CLIENT_PHONE. recebido:', phone, '| permitido:', testPhone);
+  // Modo de teste: suporta lista separada por vírgula (ex: 558298210364,120363415356763962)
+  const testPhones = (process.env.TEST_CLIENT_PHONE || '')
+    .split(',')
+    .map(p => p.replace(/\D/g, ''))
+    .filter(Boolean);
+  if (testPhones.length && !testPhones.includes(phone.replace(/\D/g, ''))) {
+    console.log('[rotearCliente] ignorado por TEST_CLIENT_PHONE. recebido:', phone, '| permitidos:', testPhones.join(', '));
     return;
   }
 

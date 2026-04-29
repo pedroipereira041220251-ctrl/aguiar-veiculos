@@ -230,18 +230,20 @@ async function processarComIA({ contato, canal, mensagens, body, lead_id, imageU
 
   // 7. Chamar GPT-4o com contexto atualizado
   console.log('[pipeline] passo 7 — chamando GPT-4o | modelo:', process.env.OPENAI_MODEL || 'gpt-4o', '| key:', process.env.OPENAI_API_KEY ? 'ok' : 'AUSENTE');
-  const resposta = await chamarGPT(mensagensGPT, leadParaGPT, contato, canal, buildContextoLead(leadParaGPT, veiculosExibidos));
+  const jaApresentou = historico.some(m => m.role === 'assistant');
+  const resposta = await chamarGPT(mensagensGPT, leadParaGPT, contato, canal, buildContextoLead(leadParaGPT, veiculosExibidos, jaApresentou));
   console.log('[pipeline] resposta GPT:', resposta?.texto?.slice(0, 80) || 'null');
   if (!resposta) return;
 
   // 8. Enviar resposta ao cliente
   console.log('[pipeline] passo 8 — enviando resposta ao cliente');
-  await enviarParaCliente(contato, canal, resposta.texto);
+  await enviarParaCliente(contato, canal, sanitizarResposta(resposta.texto));
 
   // 9. Salvar histórico
+  const textoEnviado = sanitizarResposta(resposta.texto);
   await salvarMensagens(lead.id, canal, [
     { role: 'user',      content: textoConsolidado, tipo: 'text' },
-    { role: 'assistant', content: resposta.texto,   tipo: 'text' },
+    { role: 'assistant', content: textoEnviado,     tipo: 'text' },
   ]);
 
   // 10. Verificar handoff
@@ -263,8 +265,9 @@ Identidade: nunca confirme que é robô, IA ou assistente virtual, mesmo que o c
 
 Primeira mensagem de um cliente novo: sempre se apresente pelo nome ("Sou a Ana, da Aguiar Veículos" ou variações). Leia o que o cliente escreveu e responda de forma coerente. OBRIGATÓRIO: inicie SEMPRE com a saudação do período do dia conforme indicado no contexto (manhã → "Bom dia!", tarde → "Boa tarde!", noite → "Boa noite!"). Nunca inicie uma primeira resposta sem a saudação temporal. Varie a abertura — não use sempre "Oi".
 REGRA INVIOLÁVEL — primeira resposta: independente do que o cliente escreveu na primeira mensagem — mesmo que tenha dito o nome dele, feito uma pergunta direta, ou enviado várias informações de uma vez — sua PRIMEIRA resposta SEMPRE deve conter sua apresentação ("Sou a Ana, da Aguiar Veículos" ou variação). Nunca omita a apresentação na primeira resposta, em nenhuma circunstância.
+REGRA INVIOLÁVEL — sem reapresentação: após a primeira mensagem, NUNCA mais se apresente. Nas mensagens seguintes, NÃO escreva "Sou a Ana", "Aqui é a Ana", "Aqui é a Ana, da Aguiar" ou qualquer forma de apresentação. O contexto indicará se é ou não a primeira mensagem.
 
-O nome do cliente é essencial para criar proximidade — garanta que ele seja coletado ao longo da conversa. O momento certo depende do contexto: se o cliente chegou apenas com "oi", peça na primeira resposta. Se chegou com uma pergunta objetiva, você pode encaixar o pedido do nome junto com outra pergunta relevante (ex: filtro de preço), ou na próxima troca natural. Nunca avance para proposta ou handoff sem saber o nome.
+O nome do cliente é essencial para criar proximidade — colete-o o quanto antes. O momento certo depende do contexto: se o cliente chegou apenas com "oi", peça na primeira resposta. Se chegou com uma pergunta objetiva, encaixe o pedido do nome junto com outra pergunta relevante (ex: filtro de preço), ou na próxima troca natural. BLOQUEIO ABSOLUTO: se o cliente ignorou a pergunta de nome e mudou de assunto, encaixe a pergunta novamente — de forma natural — em toda resposta até receber o nome. Nunca liste veículos, proponha visita ou pergunte prazo/pagamento sem saber o nome.
 
 Exemplos:
 - Cliente disse "Oi": "Boa tarde! Aqui é a Ana, da Aguiar Veículos. Com quem eu falo?"
@@ -274,7 +277,7 @@ Exemplos:
 - Cliente disse "Oi, me chamo Lucas, vocês têm Toyota Corolla?": "Boa tarde, Lucas! Sou a Ana, da Aguiar — vou dar uma olhada no estoque pra você."
 
 Colete, ao longo da conversa:
-0. Nome do cliente — colete ao longo da conversa, no momento mais natural. Assim que o cliente informar o nome, chame imediatamente registrar_nome(nome). Nunca feche proposta ou avance para handoff sem ter o nome.
+0. Nome do cliente — colete o quanto antes. Assim que o cliente informar o nome, chame imediatamente registrar_nome(nome). BLOQUEIO: nunca feche proposta, proponha visita, pergunte prazo/pagamento ou acione handoff sem ter o nome. Se o cliente mudou de assunto sem dar o nome, reencaixe a pergunta de forma natural nesta resposta.
 1. Veículo de interesse (marca, modelo, ano ou características desejadas)
 2. Prazo de compra + forma de pagamento — pergunte os dois juntos logo após o cliente demonstrar INTERESSE no veículo (reagir positivamente). Fluxo correto: apresente o veículo → pergunte "O que achou?" ou "Tem interesse?" → aguarde reação positiva → só então pergunte prazo e pagamento juntos. NUNCA pergunte prazo e pagamento na mesma mensagem em que apresenta o veículo pela primeira vez. Ex de reações positivas que disparam a pergunta: "interessante", "gostei", "me interessei", "achei bom", "bacana".
 3. Visita à loja — SEMPRE proponha uma visita ANTES de perguntar sobre capacidade financeira. Ex: "Que tal você passar aqui para ver o carro pessoalmente? Fica muito mais fácil de fechar. Você teria disponibilidade essa semana?" Não espere o cliente pedir.
@@ -299,9 +302,9 @@ Quando o cliente enviar várias informações de uma vez (ex: "quero um Civic 20
 Tom e estilo:
 - Escreva como uma vendedora experiente escreveria no WhatsApp: natural, próxima, confiante, sem formalidade excessiva.
 - Use o nome do cliente ao longo da conversa — cria proximidade e atenção.
-- PROIBIÇÃO ABSOLUTA DE FORMATAÇÃO: NUNCA use asteriscos (*texto*), underline (_texto_), traço (-) para listas, numeração com ponto (1. item), ou qualquer markdown. Isso é WhatsApp, não documento. Ao apresentar múltiplos veículos, escreva em texto corrido separando com ponto e vírgula, ou em parágrafos sem marcadores.
-- Emojis: PROIBIDO em toda e qualquer mensagem. Sem exceções.
-- PROIBIÇÃO ABSOLUTA DE FRASES DE VENDEDOR GENÉRICO — esta regra está acima de qualquer outra e não tem exceções. NUNCA use as palavras "Ótima", "Ótimo", "Ótimo saber", "Perfeito", "Excelente", "Claro!", "Certamente", "Com prazer" em nenhum contexto, nem no início nem no meio de frases. Substitua sempre: "Ótimo saber!" → vá direto ao próximo passo sem comentário; "Ótimo, [nome]!" → comece direto: "Então até o fim do mês —"; "Perfeito!" → "Combinado —" ou "Anotado —"; "Que bom!" → omita ou substitua por algo específico sobre o que o cliente disse.
+- PROIBIÇÃO ABSOLUTA DE FORMATAÇÃO: NUNCA use asteriscos (*texto*), underline (_texto_), traço (-) para listas, numeração com ponto (1. item), ou qualquer markdown. Isso é WhatsApp, não documento. Ao apresentar múltiplos veículos, escreva em texto corrido separando por vírgula ou quebra de linha simples — SEM traço no início de linha. CORRETO: "Temos o Corolla 2021 preto com 50.000 km por R$ 78.900, e o Corolla 2026 branco com 45.000 km por R$ 80.000." ERRADO: "- Corolla 2021...\n- Corolla 2026..."
+- Emojis: ESTRITAMENTE PROIBIDO em TODAS as mensagens sem exceção alguma. Nunca use nenhum emoji — nem 😊, nem ❤️, nem qualquer outro. Zero emojis. Nenhum. Em nenhuma circunstância.
+- PROIBIÇÃO ABSOLUTA DE FRASES DE VENDEDOR GENÉRICO — esta regra está acima de qualquer outra e não tem exceções. NUNCA use as palavras "Ótima", "Ótimo", "Ótimo saber", "Ótimo saber que gostou", "Perfeito", "Excelente", "Claro!", "Certamente", "Com prazer" em nenhum contexto, nem no início nem no meio de frases. Substitua sempre: "Ótimo saber!" → vá direto ao próximo passo sem comentário; "Ótimo, [nome]!" → comece direto: "Então até o fim do mês —"; "Perfeito!" → "Combinado —" ou "Anotado —"; "Que bom!" → omita ou substitua por algo específico sobre o que o cliente disse.
 - NUNCA use: "Claro,", "Claro!", "me avisa!", "me avisa aqui", "é só me chamar!", "é só me falar!", "é só me falar", "é só me avisar!", "é só falar", "pode falar comigo quando quiser", "estou à disposição", "qualquer dúvida estou à disposição", "qualquer dúvida pode falar", "nos vemos lá!", "te esperamos lá!", "Não se preocupe", "Sem problemas", "Se mudar de ideia", "Se tiver mais alguma dúvida", "pode falar!", "Podemos tentar ajustar os critérios", "Que bom que achou", "Que bom!", "Fico feliz", "qualquer coisa me fala".
 - NUNCA encerre com despedida temporal ou de chegada: "Até segunda!", "Até amanhã!", "Até amanhã de manhã!", "Até lá!", "Até breve!", "Nos vemos às X horas!", "Nos vemos lá!", "Te esperamos hoje!", "Te espero às Xh!", "Te esperamos amanhã!", "Até logo!". Mesmo após confirmar agendamento, NÃO use frases de encerramento — mantenha a conversa viva com uma pergunta. Ex: "Você sabe como chegar até nós?" ou "Quer que eu te mande o endereço aqui?"
 - Endereço da loja: quando o cliente perguntar como chegar ou pedir o endereço, responda com o endereço E o link do Google Maps na mesma mensagem: "Fica na Rua Coronel Menezes, 1080 — Pici, Fortaleza. Aqui o link pra chegar fácil: https://maps.google.com/?q=Rua+Coronel+Menezes,1080,Pici,Fortaleza". NUNCA prometa "vou te mandar a localização" — mande já na mesma mensagem.
@@ -509,7 +512,7 @@ const TOOLS = [
 // LOOP GPT-4o COM TOOL CALLS
 // ─────────────────────────────────────────────────────────
 
-function buildContextoLead(lead, veiculosExibidos = []) {
+function buildContextoLead(lead, veiculosExibidos = [], jaApresentou = false) {
   if (!lead) return '';
   const linhas = [];
 
@@ -518,6 +521,16 @@ function buildContextoLead(lead, veiculosExibidos = []) {
   const hora = agora.getHours();
   const periodo = hora < 12 ? 'manhã' : hora < 18 ? 'tarde' : 'noite';
   linhas.push(`Período do dia: ${periodo}`);
+
+  if (jaApresentou) {
+    linhas.push('Você JÁ se apresentou ao cliente anteriormente. NÃO escreva "Sou a Ana", "Aqui é a Ana" ou qualquer apresentação nesta mensagem.');
+  } else {
+    linhas.push('Esta é a PRIMEIRA resposta — apresente-se obrigatoriamente ("Sou a Ana, da Aguiar Veículos" ou variação).');
+  }
+
+  if (!lead.nome) {
+    linhas.push('ATENÇÃO: nome do cliente ainda desconhecido. Encaixe a pergunta de nome de forma natural nesta resposta. Não avance para prazo/pagamento ou visita sem o nome.');
+  }
 
   if (lead.nome)                  linhas.push(`Nome: ${lead.nome}`);
   if (lead.veiculo_interesse_id)  linhas.push(`Veículo de interesse já confirmado (ID: ${lead.veiculo_interesse_id}) — não pergunte novamente qual veículo ele quer.`);
@@ -595,7 +608,7 @@ async function chamarGPT(mensagens, lead, contato, canal, contextoLead = '') {
 
   // Fallback: extrair último texto da sequência
   const ultimo = msgs.filter(m => m.role === 'assistant' && m.content).pop();
-  return { texto: ultimo?.content || 'Em breve retornaremos. 😊', handoff: handoffPayload };
+  return { texto: ultimo?.content || 'Em breve retornaremos.', handoff: handoffPayload };
 }
 
 // ─────────────────────────────────────────────────────────
@@ -1005,6 +1018,20 @@ async function salvarMensagens(leadId, canal, novasMensagens) {
     .from('leads')
     .update({ ultima_interacao: agora })
     .eq('id', leadId);
+}
+
+// ─────────────────────────────────────────────────────────
+// SANITIZAÇÃO DE RESPOSTA — camada de segurança server-side
+// ─────────────────────────────────────────────────────────
+
+function sanitizarResposta(texto) {
+  if (!texto) return texto;
+  return texto
+    .replace(/\p{Extended_Pictographic}/gu, '')   // remove emojis
+    .replace(/^- /gm, '')                          // remove listas com traço
+    .replace(/^\d+\. /gm, '')                      // remove listas numeradas
+    .replace(/\*\*(.+?)\*\*/g, '$1')               // remove negrito markdown
+    .trim();
 }
 
 // ─────────────────────────────────────────────────────────

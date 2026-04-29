@@ -262,7 +262,7 @@ export default function VeiculoDetailPage() {
         </div>
       </div>
 
-      <div className="px-5 md:px-8 pt-5 md:pt-8">
+      <div className="px-5 md:px-8 pt-5 md:pt-8 max-w-4xl md:mx-auto">
         <FotoGaleria
           veiculoId={id}
           fotos={veiculo.fotos}

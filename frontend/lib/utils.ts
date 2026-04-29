@@ -9,6 +9,13 @@ export function fmt(val: number | undefined | null) {
   return (val ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
+export function fmtShort(val: number | undefined | null) {
+  const n = val ?? 0;
+  if (n >= 1_000_000) return `R$ ${(n / 1_000_000).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}M`;
+  if (n >= 1_000)     return `R$ ${(n / 1_000).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}k`;
+  return fmt(n);
+}
+
 export function fmtKm(km: number) {
   return km.toLocaleString('pt-BR') + ' km';
 }

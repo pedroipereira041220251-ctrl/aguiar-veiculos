@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { api, type VendedorResumo, type VendaVendedor, type Vendedor } from '@/lib/api';
-import { fmt, cn } from '@/lib/utils';
+import { fmt, fmtShort, cn } from '@/lib/utils';
 import { RefreshCw, Plus, Trash2, Trophy, Users, ChevronDown, ChevronUp, UserCheck, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const PODIUM_COLOR = ['text-yellow-400', 'text-text-muted', 'text-amber-600'];
@@ -136,11 +136,11 @@ export default function VendedoresPage() {
           </div>
           <div className="px-3 md:px-8 py-3 md:py-4">
             <p className="stat-label mb-1">Receita</p>
-            <p className="text-lg md:text-xl font-bold font-mono text-green-400 truncate">{fmt(totalGeral)}</p>
+            <p className="text-base md:text-xl font-bold font-mono text-green-400"><span className="sm:hidden">{fmtShort(totalGeral)}</span><span className="hidden sm:inline">{fmt(totalGeral)}</span></p>
           </div>
           <div className="px-3 md:px-8 py-3 md:py-4">
             <p className="stat-label mb-1">Comissões</p>
-            <p className="text-lg md:text-xl font-bold font-mono text-primary truncate">{fmt(comissaoGeral)}</p>
+            <p className="text-base md:text-xl font-bold font-mono text-primary"><span className="sm:hidden">{fmtShort(comissaoGeral)}</span><span className="hidden sm:inline">{fmt(comissaoGeral)}</span></p>
             <p className="text-2xs text-text-dim mt-0.5">10% / venda</p>
           </div>
         </div>

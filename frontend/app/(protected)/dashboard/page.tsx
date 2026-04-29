@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api, type FinanceiroEstoque, type FinanceiroResumo, type Lead, type Alerta, type Veiculo } from '@/lib/api';
-import { fmt, fmtKm, FUNIL_LABEL, cn } from '@/lib/utils';
+import { fmt, fmtShort, fmtKm, FUNIL_LABEL, cn } from '@/lib/utils';
 import {
   Car, TrendingUp, DollarSign, Users, Bell, Plus,
   AlertTriangle, Phone, Instagram, RefreshCw, ArrowUpRight, LayoutDashboard,
@@ -87,8 +87,8 @@ export default function DashboardPage() {
             },
             {
               label: 'Receita do mês',
-              value: loading ? '—' : fmt(resumo?.receita),
-              sub: loading ? null : `Lucro: ${fmt(resumo?.lucro_real)}`,
+              value: loading ? '—' : fmtShort(resumo?.receita),
+              sub: loading ? null : `Lucro: ${fmtShort(resumo?.lucro_real)}`,
               icon: DollarSign, href: '/financeiro', color: 'text-gradient-red',
             },
           ].map(({ label, value, sub, icon: Icon, href, color }) => (

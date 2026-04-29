@@ -6,7 +6,7 @@ import {
   api, type FinanceiroResumo, type FinanceiroEstoque,
   type FinanceiroRanking, type FinanceiroCategoria,
 } from '@/lib/api';
-import { fmt, cn } from '@/lib/utils';
+import { fmt, fmtShort, cn } from '@/lib/utils';
 import { TrendingUp, ShoppingCart, BarChart2, ChevronLeft, ChevronRight, RefreshCw, Package, DollarSign } from 'lucide-react';
 
 function mesLabel(mes: string) {
@@ -91,8 +91,9 @@ export default function FinanceiroPage() {
           <p className="stat-label mb-2">Receita total do período</p>
           {loading
             ? <Sk className="h-14 w-52" />
-            : <p className="font-mono text-4xl md:text-5xl font-bold text-gradient-red leading-none">
-                {fmt(resumo?.receita)}
+            : <p className="font-mono text-3xl md:text-5xl font-bold text-gradient-red leading-none">
+                <span className="md:hidden">{fmtShort(resumo?.receita)}</span>
+                <span className="hidden md:inline">{fmt(resumo?.receita)}</span>
               </p>
           }
           {!loading && resumo && (
@@ -111,7 +112,7 @@ export default function FinanceiroPage() {
           {[
             { label: 'Vendas', value: loading ? '—' : String(resumo?.qtd_vendas ?? 0), sub: 'vendidos', icon: ShoppingCart },
             { label: 'Margem', value: loading ? '—' : `${resumo?.margem_pct?.toFixed(1) ?? '0'}%`, sub: 'lucro médio', icon: BarChart2 },
-            { label: 'Estoque', value: loading ? '—' : String(estoque?.qtd_veiculos ?? 0), sub: `${fmt(estoque?.total_investido)}`, icon: Package },
+            { label: 'Estoque', value: loading ? '—' : String(estoque?.qtd_veiculos ?? 0), sub: fmtShort(estoque?.total_investido), icon: Package },
           ].map(({ label, value, sub, icon: Icon }) => (
             <div key={label} className="px-3 md:px-5 py-3 md:py-4">
               <div className="flex items-center gap-2 mb-1.5">

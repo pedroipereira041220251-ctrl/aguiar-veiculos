@@ -4,7 +4,7 @@ export default function ProtectedLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex min-h-screen bg-background">
       <Nav />
-      <main className="flex-1 min-w-0 pb-[72px] md:pb-0 overflow-x-hidden">
+      <main className="flex-1 min-w-0 main-safe-pb overflow-x-hidden">
         {children}
       </main>
     </div>

@@ -123,4 +123,24 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+
+  /* Safe area para iPhone com notch/Dynamic Island */
+  .nav-safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* Padding do conteúdo principal no mobile (nav-bar + safe area) */
+  .main-safe-pb {
+    padding-bottom: 72px;
+  }
+  @supports (padding: env(safe-area-inset-bottom)) {
+    .main-safe-pb {
+      padding-bottom: calc(72px + env(safe-area-inset-bottom));
+    }
+  }
+  @media (min-width: 768px) {
+    .main-safe-pb {
+      padding-bottom: 0;
+    }
+  }
 }

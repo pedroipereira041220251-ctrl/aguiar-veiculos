@@ -130,18 +130,18 @@ export default function VendedoresPage() {
       {/* ── Stat bar ── */}
       <div className="border-b border-border">
         <div className="grid grid-cols-3 divide-x divide-border">
-          <div className="px-5 md:px-8 py-4">
+          <div className="px-3 md:px-8 py-3 md:py-4">
             <p className="stat-label mb-1">Vendedores</p>
-            <p className="stat-number text-2xl">{vendedores.length}</p>
+            <p className="stat-number text-xl md:text-2xl">{vendedores.length}</p>
           </div>
-          <div className="px-5 md:px-8 py-4">
-            <p className="stat-label mb-1">Receita total</p>
-            <p className="text-xl font-bold font-mono text-green-400">{fmt(totalGeral)}</p>
+          <div className="px-3 md:px-8 py-3 md:py-4">
+            <p className="stat-label mb-1">Receita</p>
+            <p className="text-lg md:text-xl font-bold font-mono text-green-400 truncate">{fmt(totalGeral)}</p>
           </div>
-          <div className="px-5 md:px-8 py-4">
+          <div className="px-3 md:px-8 py-3 md:py-4">
             <p className="stat-label mb-1">Comissões</p>
-            <p className="text-xl font-bold font-mono text-primary">{fmt(comissaoGeral)}</p>
-            <p className="text-2xs text-text-dim mt-0.5">10% por venda</p>
+            <p className="text-lg md:text-xl font-bold font-mono text-primary truncate">{fmt(comissaoGeral)}</p>
+            <p className="text-2xs text-text-dim mt-0.5">10% / venda</p>
           </div>
         </div>
       </div>

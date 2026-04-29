@@ -220,51 +220,56 @@ export default function CRMPage() {
       </div>
 
       {/* ── Toolbar ── */}
-      <div className="border-b border-border px-5 md:px-8 py-3 bg-sidebar/30 flex items-center gap-2 flex-wrap">
-        <div className="relative w-full sm:w-48">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
-          <input
-            value={busca}
-            onChange={e => setBusca(e.target.value)}
-            placeholder="Nome ou número..."
-            className="input pl-8 !py-1.5 !text-xs"
-          />
+      <div className="border-b border-border bg-sidebar/30">
+        {/* Busca */}
+        <div className="flex items-center gap-2 px-5 md:px-8 pt-3 pb-2">
+          <div className="relative flex-1 md:max-w-[13rem]">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
+            <input
+              value={busca}
+              onChange={e => setBusca(e.target.value)}
+              placeholder="Nome ou número..."
+              className="input pl-8 !py-1.5 !text-xs"
+            />
+          </div>
+          {leadsFiltrados.length < leads.length && (
+            <span className="text-xs text-text-muted font-medium">{leadsFiltrados.length}/{leads.length}</span>
+          )}
         </div>
 
-        <div className="flex gap-1">
+        {/* Filtros — scroll horizontal em mobile */}
+        <div className="flex items-center gap-1.5 px-5 md:px-8 pb-3 overflow-x-auto scrollbar-hide">
           {(['todos', 'whatsapp', 'instagram'] as const).map(c => (
             <button key={c} onClick={() => setFiltroCanal(c)}
-              className={cn('px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors capitalize',
+              className={cn('flex-shrink-0 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors capitalize',
                 filtroCanal === c ? 'bg-primary/10 border-primary/30 text-primary' : 'border-border text-text-muted hover:text-text-primary'
               )}>
               {c === 'todos' ? 'Canal' : c}
             </button>
           ))}
-        </div>
 
-        <div className="flex gap-1">
+          <div className="w-px h-4 bg-border flex-shrink-0 mx-0.5" />
+
           {([['todos','Atendimento'],['ana','Ana'],['humano','Humano']] as const).map(([v, l]) => (
             <button key={v} onClick={() => setFiltroAtend(v)}
-              className={cn('px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors',
+              className={cn('flex-shrink-0 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors',
                 filtroAtend === v ? 'bg-primary/10 border-primary/30 text-primary' : 'border-border text-text-muted hover:text-text-primary'
               )}>
               {l}
             </button>
           ))}
+
+          <div className="w-px h-4 bg-border flex-shrink-0 mx-0.5" />
+
+          <button
+            onClick={() => setOcultarAntigos(v => !v)}
+            className={cn('flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors',
+              ocultarAntigos ? 'bg-primary/10 border-primary/30 text-primary' : 'border-border text-text-muted hover:text-text-primary'
+            )}>
+            <Clock size={11} />
+            +30 dias
+          </button>
         </div>
-
-        <button
-          onClick={() => setOcultarAntigos(v => !v)}
-          className={cn('flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors',
-            ocultarAntigos ? 'bg-primary/10 border-primary/30 text-primary' : 'border-border text-text-muted hover:text-text-primary'
-          )}>
-          <Clock size={11} />
-          &gt; 30 dias
-        </button>
-
-        {leadsFiltrados.length < leads.length && (
-          <span className="text-xs text-text-muted ml-auto font-medium">{leadsFiltrados.length}/{leads.length}</span>
-        )}
       </div>
 
       <div className="p-5 md:p-8">

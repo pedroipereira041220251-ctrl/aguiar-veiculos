@@ -23,7 +23,13 @@ const systemLinks = [
   { href: '/configuracoes', label: 'Configurações', icon: Settings },
 ];
 
-const mobileLinks = [...mainLinks].slice(0, 5);
+const mobileLinks = [
+  { href: '/dashboard',  label: 'Painel',   icon: LayoutDashboard },
+  { href: '/estoque',    label: 'Estoque',  icon: Car },
+  { href: '/crm',        label: 'CRM',      icon: Users },
+  { href: '/alertas',    label: 'Alertas',  icon: Bell },
+  { href: '/financeiro', label: 'Finanças', icon: DollarSign },
+];
 
 export default function Nav() {
   const pathname = usePathname();
@@ -124,7 +130,7 @@ export default function Nav() {
       </aside>
 
       {/* ── Bottom nav mobile ── */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-sidebar border-t border-border z-40 safe-bottom">
+      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-sidebar border-t border-border z-40 nav-safe-bottom">
         <div className="flex">
           {mobileLinks.map(({ href, label, icon: Icon }) => {
             const active = isActive(href);

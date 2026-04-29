@@ -109,19 +109,19 @@ export default function FinanceiroPage() {
         {/* KPIs secundários */}
         <div className="grid grid-cols-3 divide-x divide-border border-t border-border">
           {[
-            { label: 'Vendas', value: loading ? '—' : String(resumo?.qtd_vendas ?? 0), sub: 'veículos vendidos', icon: ShoppingCart, color: 'text-text-primary' },
-            { label: 'Margem', value: loading ? '—' : `${resumo?.margem_pct?.toFixed(1) ?? '0'}%`, sub: 'lucro médio', icon: BarChart2, color: 'text-text-primary' },
-            { label: 'Estoque', value: loading ? '—' : String(estoque?.qtd_veiculos ?? 0), sub: `${fmt(estoque?.total_investido)} investidos`, icon: Package, color: 'text-text-primary' },
+            { label: 'Vendas', value: loading ? '—' : String(resumo?.qtd_vendas ?? 0), sub: 'vendidos', icon: ShoppingCart },
+            { label: 'Margem', value: loading ? '—' : `${resumo?.margem_pct?.toFixed(1) ?? '0'}%`, sub: 'lucro médio', icon: BarChart2 },
+            { label: 'Estoque', value: loading ? '—' : String(estoque?.qtd_veiculos ?? 0), sub: `${fmt(estoque?.total_investido)}`, icon: Package },
           ].map(({ label, value, sub, icon: Icon }) => (
-            <div key={label} className="px-5 py-4">
+            <div key={label} className="px-3 md:px-5 py-3 md:py-4">
               <div className="flex items-center gap-2 mb-1.5">
                 <div className="w-6 h-6 rounded-md bg-white/[0.04] border border-border flex items-center justify-center">
                   <Icon className="w-3.5 h-3.5 text-text-muted" strokeWidth={1.8} />
                 </div>
                 <p className="stat-label">{label}</p>
               </div>
-              <p className="stat-number text-2xl">{value}</p>
-              <p className="text-xs text-text-muted mt-1">{sub}</p>
+              <p className="stat-number text-xl md:text-2xl">{value}</p>
+              <p className="text-xs text-text-muted mt-1 truncate">{sub}</p>
             </div>
           ))}
         </div>

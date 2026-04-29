@@ -129,20 +129,31 @@ export default function CRMPage() {
   return (
     <div className="p-4 md:p-6" onClick={() => setMovendoId(null)}>
       <div className="flex items-center justify-between mb-5">
-        <h1 className="text-xl font-bold text-text-primary">CRM</h1>
-        <span className="text-sm text-text-muted">{leads.length} lead{leads.length !== 1 ? 's' : ''}</span>
+        <div>
+          <h1 className="text-lg md:text-xl font-bold text-text-primary tracking-tight">CRM</h1>
+          <p className="text-xs text-text-muted mt-0.5 font-medium">{leads.length} lead{leads.length !== 1 ? 's' : ''} ativos</p>
+        </div>
+        <button
+          onClick={carregar}
+          className="p-2 rounded-lg border border-border text-text-muted hover:text-text-primary hover:border-border-bright transition-all"
+          title="Atualizar"
+        >
+          <RefreshCw size={14} />
+        </button>
       </div>
 
       {leads.length === 0 ? (
         <div className="text-center py-16">
-          <Users size={48} className="mx-auto text-border mb-3" />
-          <p className="text-sm text-text-muted">Nenhum lead ainda.</p>
-          <p className="text-xs text-text-muted/60 mt-1">Os leads chegam via WhatsApp ou Instagram.</p>
+          <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-border flex items-center justify-center mx-auto mb-4">
+            <Users size={28} className="text-text-dim" strokeWidth={1.5} />
+          </div>
+          <p className="text-sm font-medium text-text-muted">Nenhum lead ainda.</p>
+          <p className="text-xs text-text-dim mt-1">Os leads chegam via WhatsApp ou Instagram.</p>
         </div>
       ) : (
         <>
           {/* Desktop: kanban horizontal */}
-          <div className="hidden md:flex gap-3 overflow-x-auto pb-4">
+          <div className="hidden md:flex gap-3 overflow-x-auto pb-4 scrollbar-hide -mx-1 px-1">
             {COLUNAS.map(col => (
               <Coluna
                 key={col}
@@ -185,15 +196,17 @@ export default function CRMPage() {
       {/* ── Drawer de histórico ── */}
       {(drawerLead || loadingDrawer) && (
         <div className="fixed inset-0 z-50 flex justify-end">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setDrawerLead(null)} />
-          <div className="relative w-full max-w-sm bg-background border-l border-border flex flex-col h-full shadow-2xl animate-fade-in">
-            <div className="px-4 py-3 border-b border-border flex items-center justify-between flex-shrink-0">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setDrawerLead(null)} />
+          <div className="relative w-full max-w-sm bg-sidebar border-l border-border flex flex-col h-full shadow-2xl animate-slide-in">
+            <div className="px-5 py-4 border-b border-border flex items-center justify-between flex-shrink-0">
               <div>
-                <p className="font-semibold text-text-primary text-sm">{drawerLead?.nome || drawerLead?.contato}</p>
-                <p className="text-xs text-text-muted capitalize">{drawerLead?.canal} · Score {drawerLead?.score_qualificacao ?? '—'}</p>
+                <p className="font-bold text-text-primary text-sm">{drawerLead?.nome || drawerLead?.contato}</p>
+                <p className="text-xs text-text-muted mt-0.5 capitalize font-medium">
+                  {drawerLead?.canal} · Score {drawerLead?.score_qualificacao ?? '—'}
+                </p>
               </div>
-              <button onClick={() => setDrawerLead(null)} className="p-1 text-text-muted hover:text-text-primary">
-                <X size={18} />
+              <button onClick={() => setDrawerLead(null)} className="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-white/5 transition-colors">
+                <X size={16} />
               </button>
             </div>
 

@@ -5,7 +5,7 @@ import { api, type Config, type BotsStatus } from '@/lib/api';
 import { Settings, Clock, Bell, MessageSquare, Save, RefreshCw, CheckCircle2, Wifi, WifiOff, Bot } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const INPUT = 'w-full px-3.5 py-2.5 bg-white/5 border border-border rounded-xl text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors';
+const INPUT = 'input';
 
 const DIAS = [
   { n: 0, label: 'Dom' },
@@ -115,7 +115,7 @@ export default function ConfiguracoesPage() {
     <div className="p-4 md:p-6 max-w-2xl mx-auto animate-fade-in">
       <div className="flex items-center gap-3 mb-6">
         <Settings size={22} className="text-text-muted" />
-        <h1 className="text-xl font-bold text-text-primary">Configurações</h1>
+        <h1 className="text-lg md:text-xl font-bold text-text-primary tracking-tight">Configurações</h1>
       </div>
 
       <form onSubmit={salvar} className="space-y-4">

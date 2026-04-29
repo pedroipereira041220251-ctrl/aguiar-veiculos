@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { api } from '@/lib/api';
 import { ChevronLeft, Search, CheckCircle2 } from 'lucide-react';
 
-const INPUT = 'w-full px-3.5 py-2.5 bg-white/5 border border-border rounded-xl text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors';
+const INPUT = 'input';
 
 const TIPOS = ['sedan','hatch','SUV','picape','crossover','minivan','esportivo'] as const;
 type TipoVeiculo = typeof TIPOS[number] | '';
@@ -95,7 +95,7 @@ export default function EstoqueNovoPage() {
         <Link href="/estoque" className="text-text-muted hover:text-text-primary transition-colors p-1 -ml-1">
           <ChevronLeft size={22} />
         </Link>
-        <h1 className="text-xl font-bold text-text-primary">Novo veículo</h1>
+        <h1 className="text-lg font-bold text-text-primary tracking-tight">Novo veículo</h1>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
@@ -202,7 +202,7 @@ export default function EstoqueNovoPage() {
           <button
             type="submit"
             disabled={salvando}
-            className="flex-1 py-3 bg-primary hover:bg-primary-light text-white font-semibold rounded-xl text-sm transition-colors disabled:opacity-60 shadow-lg shadow-primary/20"
+            className="flex-1 py-3 bg-primary hover:bg-primary-light text-white font-bold rounded-xl text-sm transition-all disabled:opacity-60 shadow-glow-red hover:shadow-none"
           >
             {salvando ? 'Cadastrando...' : 'Cadastrar veículo'}
           </button>

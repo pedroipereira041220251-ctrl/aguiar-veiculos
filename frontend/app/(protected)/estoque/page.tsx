@@ -91,37 +91,34 @@ export default function EstoquePage() {
     <div className="p-4 md:p-6 max-w-5xl mx-auto animate-fade-in">
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
-        <h1 className="text-xl font-bold text-text-primary">Estoque</h1>
-        <Link
-          href="/estoque/novo"
-          className="flex items-center gap-1.5 bg-primary hover:bg-primary-light text-white px-3.5 py-2 rounded-xl text-sm font-medium transition-colors shadow-lg shadow-primary/20"
-        >
+        <h1 className="text-lg md:text-xl font-bold text-text-primary tracking-tight">Estoque</h1>
+        <Link href="/estoque/novo" className="btn-primary">
           <Plus size={16} /> Novo veículo
         </Link>
       </div>
 
       {/* Busca */}
       <div className="relative mb-3">
-        <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
+        <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
         <input
           value={busca}
           onChange={e => setBusca(e.target.value)}
           placeholder="Buscar placa, marca ou modelo..."
-          className="w-full pl-10 pr-4 py-2.5 bg-white/5 border border-border rounded-xl text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors"
+          className="input pl-10"
         />
       </div>
 
       {/* Filtros */}
-      <div className={cn('flex gap-2 overflow-x-auto pb-1', status === 'vendido' ? 'mb-3' : 'mb-5')}>
+      <div className={cn('flex gap-2 overflow-x-auto pb-1 scrollbar-hide', status === 'vendido' ? 'mb-3' : 'mb-5')}>
         {FILTROS.map(f => (
           <button
             key={f.value}
             onClick={() => setStatus(f.value)}
             className={cn(
-              'flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors border',
+              'flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold transition-all border tracking-wide',
               status === f.value
-                ? 'bg-primary text-white border-primary shadow-sm shadow-primary/20'
-                : 'bg-white/5 text-text-muted border-border hover:border-text-muted hover:text-text-primary',
+                ? 'bg-primary text-white border-primary shadow-glow-red'
+                : 'bg-transparent text-text-muted border-border hover:border-border-bright hover:text-text-primary',
             )}
           >
             {f.label}
@@ -131,7 +128,7 @@ export default function EstoquePage() {
 
       {/* Seletor de mês — apenas para vendidos */}
       {status === 'vendido' && (
-        <div className="flex items-center justify-between mb-5 bg-white/5 border border-border rounded-xl px-4 py-2.5">
+        <div className="flex items-center justify-between mb-5 bg-card border border-border rounded-xl px-4 py-2.5">
           <button
             onClick={() => setMes(mesAnterior(mes))}
             className="p-1 text-text-muted hover:text-text-primary transition-colors"
@@ -203,7 +200,7 @@ function VeiculoCard({ v }: { v: Veiculo }) {
   return (
     <Link
       href={`/estoque/${v.id}`}
-      className="bg-card border border-border rounded-xl overflow-hidden hover:bg-card-hover hover:border-border transition-all block group"
+      className="bg-card border border-border rounded-xl overflow-hidden hover:bg-card-hover hover:border-border-bright transition-all block group shadow-card"
     >
       <div className="aspect-video bg-white/5 relative overflow-hidden">
         {v.foto_capa ? (

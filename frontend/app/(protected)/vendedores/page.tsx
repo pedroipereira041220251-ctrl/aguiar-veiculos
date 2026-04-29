@@ -97,7 +97,7 @@ export default function VendedoresPage() {
     <div className="p-4 md:p-6 max-w-2xl mx-auto">
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-xl font-bold text-text-primary">Vendedores</h1>
+          <h1 className="text-lg md:text-xl font-bold text-text-primary tracking-tight">Vendedores</h1>
           <p className="text-xs text-text-muted mt-0.5">Comissão = 10% do valor de venda</p>
         </div>
         {vendedores.length > 0 && tab === 'desempenho' && (

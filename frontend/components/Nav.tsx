@@ -3,29 +3,31 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Car, Users, Bell, Settings, LogOut, ChevronLeft, ChevronRight, UserCheck, DollarSign } from 'lucide-react';
+import {
+  LayoutDashboard, Car, Users, Bell, Settings,
+  LogOut, UserCheck, DollarSign,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase-browser';
-import { useState } from 'react';
 
 const links = [
-  { href: '/dashboard',     label: 'Dashboard',    icon: LayoutDashboard },
-  { href: '/estoque',       label: 'Estoque',      icon: Car },
-  { href: '/crm',           label: 'CRM',          icon: Users },
-  { href: '/financeiro',    label: 'Financeiro',   icon: DollarSign },
-  { href: '/vendedores',    label: 'Vendedores',   icon: UserCheck },
-  { href: '/alertas',       label: 'Alertas',      icon: Bell },
-  { href: '/configuracoes', label: 'Configurações', icon: Settings },
+  { href: '/dashboard',     label: 'Dashboard',     icon: LayoutDashboard },
+  { href: '/estoque',       label: 'Estoque',        icon: Car },
+  { href: '/crm',           label: 'CRM',            icon: Users },
+  { href: '/financeiro',    label: 'Financeiro',     icon: DollarSign },
+  { href: '/vendedores',    label: 'Vendedores',     icon: UserCheck },
+  { href: '/alertas',       label: 'Alertas',        icon: Bell },
+  { href: '/configuracoes', label: 'Configurações',  icon: Settings },
 ];
+
+const mobileLinks = links.slice(0, 5);
 
 export default function Nav() {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
 
   async function handleLogout() {
     const supabase = createClient();
     await supabase.auth.signOut();
-    // Deletar cookies sb-* manualmente para garantir que o middleware não veja sessão
     document.cookie.split(';').forEach(c => {
       const name = c.split('=')[0].trim();
       if (name.startsWith('sb-')) {
@@ -35,118 +37,92 @@ export default function Nav() {
     window.location.replace('/login');
   }
 
+  function isActive(href: string) {
+    return pathname === href || (href !== '/dashboard' && pathname.startsWith(href));
+  }
+
   return (
     <>
       {/* ── Sidebar desktop ── */}
-      <aside
-        className={cn(
-          'hidden md:flex flex-col bg-sidebar border-r border-border transition-all duration-200 h-screen sticky top-0 flex-shrink-0',
-          collapsed ? 'w-[60px]' : 'w-56',
-        )}
-      >
-        {/* Logo */}
-        <div className={cn(
-          'flex items-center border-b border-border',
-          collapsed ? 'justify-center px-2 py-4' : 'px-4 py-4',
-        )}>
-          <div className={cn(
-            'flex items-center gap-2.5 overflow-hidden',
-            collapsed && 'justify-center',
-          )}>
-            <Image src="/logo.png" alt="Aguiar Veículos" width={32} height={32} className="rounded-lg flex-shrink-0" />
-            {!collapsed && (
-              <div>
-                <p className="font-semibold text-text-primary text-sm leading-tight">Aguiar Veículos</p>
-                <p className="text-xs text-text-muted">Painel de gestão</p>
-              </div>
-            )}
+      <aside className="hidden md:flex flex-col w-[220px] bg-sidebar border-r border-border h-screen sticky top-0 flex-shrink-0">
+
+        {/* Brand */}
+        <div className="flex items-center gap-3 px-5 py-5 border-b border-border">
+          <div className="relative flex-shrink-0">
+            <Image
+              src="/logo.png"
+              alt="Aguiar Veículos"
+              width={34}
+              height={34}
+              className="rounded-xl"
+              priority
+            />
+            <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-accent border-2 border-sidebar animate-pulse-dot" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-text-primary font-semibold text-sm leading-none truncate">Aguiar Veículos</p>
+            <p className="text-text-muted text-2xs mt-1 font-medium tracking-wide">SISTEMA ONLINE</p>
           </div>
         </div>
 
         {/* Nav links */}
-        <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
+        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+          <p className="text-2xs font-semibold uppercase tracking-widest text-text-dim px-2 mb-3">Menu</p>
           {links.map(({ href, label, icon: Icon }) => {
-            const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href));
+            const active = isActive(href);
             return (
               <Link
                 key={href}
                 href={href}
-                title={collapsed ? label : undefined}
                 className={cn(
-                  'flex items-center gap-3 py-2.5 rounded-lg transition-all text-sm relative group',
-                  collapsed ? 'justify-center px-2' : 'px-3',
+                  'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all relative',
                   active
-                    ? 'bg-primary/10 text-primary font-medium'
+                    ? 'bg-primary/10 text-primary'
                     : 'text-text-muted hover:bg-sidebar-accent hover:text-text-primary',
                 )}
               >
-                {active && !collapsed && (
-                  <span className="absolute left-0 top-1 bottom-1 w-0.5 bg-primary rounded-full" />
+                {active && (
+                  <span className="absolute left-0 inset-y-1.5 w-[3px] bg-primary rounded-r-full" />
                 )}
-                <Icon className="w-4 h-4 flex-shrink-0" />
-                {!collapsed && <span>{label}</span>}
-
-                {collapsed && (
-                  <span className="absolute left-full ml-2 px-2 py-1 bg-card border border-border rounded-md text-xs text-text-primary whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
-                    {label}
-                  </span>
-                )}
+                <Icon className="w-[18px] h-[18px] flex-shrink-0" strokeWidth={active ? 2.2 : 1.8} />
+                <span>{label}</span>
               </Link>
             );
           })}
         </nav>
 
         {/* Footer */}
-        <div className="border-t border-border">
+        <div className="px-3 py-4 border-t border-border">
           <button
             onClick={handleLogout}
-            title={collapsed ? 'Sair' : undefined}
-            className={cn(
-              'flex items-center gap-3 w-full py-3 text-text-muted hover:text-red-400 hover:bg-red-400/5 transition-colors text-sm',
-              collapsed ? 'justify-center px-2' : 'px-4',
-            )}
+            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-text-muted hover:text-red-400 hover:bg-red-400/8 transition-all"
           >
-            <LogOut className="w-4 h-4 flex-shrink-0" />
-            {!collapsed && <span>Sair</span>}
-          </button>
-
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            className={cn(
-              'flex items-center gap-3 w-full py-3 border-t border-border text-text-muted hover:text-text-primary transition-colors',
-              collapsed ? 'justify-center' : 'px-4',
-            )}
-            aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
-          >
-            {collapsed
-              ? <ChevronRight className="w-4 h-4" />
-              : <>
-                  <ChevronLeft className="w-4 h-4" />
-                  <span className="text-xs">Recolher</span>
-                </>
-            }
+            <LogOut className="w-[18px] h-[18px] flex-shrink-0" strokeWidth={1.8} />
+            <span>Sair</span>
           </button>
         </div>
       </aside>
 
       {/* ── Bottom nav mobile ── */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-sidebar border-t border-border flex z-40">
-        {links.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(href));
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                'flex-1 flex flex-col items-center justify-center py-3 gap-1 text-xs font-medium transition-colors',
-                active ? 'text-primary' : 'text-text-muted',
-              )}
-            >
-              <Icon size={20} />
-              {label}
-            </Link>
-          );
-        })}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-sidebar border-t border-border z-40 safe-bottom">
+        <div className="flex">
+          {mobileLinks.map(({ href, label, icon: Icon }) => {
+            const active = isActive(href);
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={cn(
+                  'flex-1 flex flex-col items-center justify-center pt-3 pb-4 gap-1 transition-colors min-w-0',
+                  active ? 'text-primary' : 'text-text-muted',
+                )}
+              >
+                <Icon size={20} strokeWidth={active ? 2.2 : 1.8} />
+                <span className="text-[10px] font-medium truncate">{label}</span>
+              </Link>
+            );
+          })}
+        </div>
       </nav>
     </>
   );

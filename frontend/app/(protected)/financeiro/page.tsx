@@ -80,10 +80,10 @@ export default function FinanceiroPage() {
 
       {/* Header */}
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-xl font-bold text-text-primary">Financeiro</h1>
+        <h1 className="text-lg md:text-xl font-bold text-text-primary tracking-tight">Financeiro</h1>
 
         {/* Seletor de mês */}
-        <div className="flex items-center gap-1 bg-white/5 border border-border rounded-xl p-1">
+        <div className="flex items-center gap-1 bg-card border border-border rounded-xl p-1">
           <button
             onClick={() => setMes(mesAnterior(mes))}
             className="p-1.5 text-text-muted hover:text-text-primary transition-colors rounded-lg hover:bg-white/5"

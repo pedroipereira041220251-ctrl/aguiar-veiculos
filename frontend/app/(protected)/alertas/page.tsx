@@ -40,8 +40,8 @@ export default function AlertasPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-text-primary">Alertas</h1>
-          <p className="text-text-muted text-sm mt-0.5">Pendências e avisos do sistema</p>
+          <h1 className="text-lg md:text-xl font-bold text-text-primary tracking-tight">Alertas</h1>
+          <p className="text-text-muted text-xs mt-0.5 font-medium">Pendências e avisos do sistema</p>
         </div>
         {erro && (
           <button onClick={carregar} className="flex items-center gap-1.5 text-sm text-text-muted hover:text-primary transition-colors">
@@ -84,16 +84,16 @@ export default function AlertasPage() {
           {/* Resumo */}
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-card border border-red-400/20 rounded-xl p-4 text-center">
-              <p className="text-2xl font-bold text-red-400">{criticos.length}</p>
-              <p className="text-text-muted text-xs mt-0.5">Críticos</p>
+              <p className="stat-number text-red-400">{criticos.length}</p>
+              <p className="stat-label mt-1">Críticos</p>
             </div>
             <div className="bg-card border border-yellow-400/20 rounded-xl p-4 text-center">
-              <p className="text-2xl font-bold text-yellow-400">{avisos.length}</p>
-              <p className="text-text-muted text-xs mt-0.5">Avisos</p>
+              <p className="stat-number text-yellow-400">{avisos.length}</p>
+              <p className="stat-label mt-1">Avisos</p>
             </div>
             <div className="bg-card border border-border rounded-xl p-4 text-center">
-              <p className="text-2xl font-bold text-text-primary">{alertas.length}</p>
-              <p className="text-text-muted text-xs mt-0.5">Total</p>
+              <p className="stat-number">{alertas.length}</p>
+              <p className="stat-label mt-1">Total</p>
             </div>
           </div>
 

@@ -7,7 +7,7 @@ import { api, type VeiculoCompleto, type Custo, type Foto, type DocumentacaoVeic
 import { fmt, fmtKm, STATUS_LABEL, cn } from '@/lib/utils';
 import { ChevronLeft, Edit2, Check, X, Trash2, Car, CheckCircle2, AlertCircle, Plus, Star, Lock, Unlock } from 'lucide-react';
 
-const INPUT = 'w-full px-3 py-2 bg-white/5 border border-border rounded-xl text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors';
+const INPUT = 'input';
 
 const STATUS_DOT: Record<string, string> = {
   disponivel: 'bg-green-400',

@@ -5,29 +5,12 @@ import Link from 'next/link';
 import { api, type FinanceiroEstoque, type FinanceiroResumo, type Lead, type Alerta, type Veiculo } from '@/lib/api';
 import { fmt, fmtKm, FUNIL_LABEL, cn } from '@/lib/utils';
 import {
-  Car, TrendingUp, DollarSign, Users, Bell,
-  Plus, ArrowRight, AlertTriangle, Phone, Instagram, RefreshCw,
+  Car, TrendingUp, DollarSign, Users, Bell, Plus,
+  AlertTriangle, Phone, Instagram, RefreshCw, ArrowUpRight, LayoutDashboard,
 } from 'lucide-react';
 
 function Skeleton({ className = '' }: { className?: string }) {
   return <div className={cn('animate-pulse bg-white/[0.04] rounded-lg', className)} />;
-}
-
-function StatCard({
-  label, value, sub, accent = false,
-}: {
-  label: string; value: string; sub?: string; accent?: boolean;
-}) {
-  return (
-    <div className={cn(
-      'bg-card border rounded-xl px-5 py-4 flex-1 min-w-0',
-      accent ? 'border-primary/25' : 'border-border',
-    )}>
-      <p className="stat-label">{label}</p>
-      <p className={cn('stat-number mt-1.5', accent && 'text-gradient-red')}>{value}</p>
-      {sub && <p className="text-text-muted text-xs mt-1.5">{sub}</p>}
-    </div>
-  );
 }
 
 export default function DashboardPage() {
@@ -40,171 +23,174 @@ export default function DashboardPage() {
   const [erro, setErro]         = useState(false);
 
   async function carregar() {
-    setLoading(true);
-    setErro(false);
+    setLoading(true); setErro(false);
     try {
       const [e, r, l, a, v] = await Promise.all([
-        api.financeiro.estoque(),
-        api.financeiro.resumo(),
-        api.leads.hoje(),
-        api.alertas.listar(),
+        api.financeiro.estoque(), api.financeiro.resumo(),
+        api.leads.hoje(), api.alertas.listar(),
         api.veiculos.listar({ status: 'disponivel' }),
       ]);
-      setEstoque(e);
-      setResumo(r);
-      setLeads(l);
-      setAlertas(a);
-      setVeiculos(v);
-    } catch {
-      setErro(true);
-    } finally {
-      setLoading(false);
-    }
+      setEstoque(e); setResumo(r); setLeads(l); setAlertas(a); setVeiculos(v);
+    } catch { setErro(true); } finally { setLoading(false); }
   }
 
   useEffect(() => { carregar(); }, []);
 
-  const hoje = new Date().toLocaleDateString('pt-BR', {
-    weekday: 'long', day: 'numeric', month: 'long',
-  });
-
   const urgentes = alertas.filter(a => a.urgencia === 'alta').length;
 
   return (
-    <div className="p-4 md:p-6 space-y-5 max-w-[1440px] mx-auto animate-fade-in">
+    <div className="animate-fade-in">
 
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-lg md:text-xl font-bold text-text-primary tracking-tight">Dashboard</h1>
-          <p className="text-text-muted text-xs mt-0.5 capitalize font-medium">{hoje}</p>
-        </div>
-        <div className="flex items-center gap-2.5">
+      {/* ── Page header ── */}
+      <div className="page-hero">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="breadcrumb">
+              <LayoutDashboard size={10} />
+              Painel / Dashboard
+            </p>
+            <h1 className="text-xl md:text-2xl font-bold text-text-primary tracking-tight">Visão Geral</h1>
+            <p className="text-sm text-text-muted mt-1">Acompanhe o estoque, leads e performance financeira em tempo real.</p>
+          </div>
           {erro && (
             <button
               onClick={carregar}
-              className="flex items-center gap-1.5 text-xs text-text-muted hover:text-primary transition-colors"
+              className="flex items-center gap-1.5 text-xs font-medium text-text-muted hover:text-primary transition-colors border border-border rounded-lg px-3 py-2 hover:border-primary/40"
             >
-              <RefreshCw size={14} /> Reconectar
+              <RefreshCw size={12} /> Reconectar
             </button>
           )}
-          <Link href="/estoque/novo" className="btn-primary">
-            <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">Novo veículo</span>
-            <span className="sm:hidden">Novo</span>
-          </Link>
         </div>
       </div>
 
-      {erro && (
-        <div className="bg-red-400/5 border border-red-400/15 rounded-xl px-4 py-3 text-xs text-red-400 font-medium">
-          Não foi possível conectar ao servidor. Verifique a conexão e tente novamente.
+      {/* ── Stat cards ── */}
+      <div className="border-b border-border">
+        <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-y md:divide-y-0 divide-border">
+          {[
+            {
+              label: 'Veículos em estoque',
+              value: loading ? '—' : String(estoque?.qtd_veiculos ?? '—'),
+              sub: loading ? null : estoque ? `R$ ${(estoque.total_investido / 1000).toFixed(0)}k investidos` : null,
+              icon: Car, href: '/estoque', color: 'text-text-primary',
+            },
+            {
+              label: 'Leads hoje',
+              value: loading ? '—' : String(leads.length),
+              sub: loading ? null : `${leads.filter(l => l.canal === 'whatsapp').length} WhatsApp`,
+              icon: Users, href: '/crm', color: 'text-text-primary',
+            },
+            {
+              label: 'Alertas ativos',
+              value: loading ? '—' : String(alertas.length),
+              sub: loading ? null : urgentes > 0 ? `${urgentes} urgentes` : 'Tudo em dia',
+              icon: Bell, href: '/alertas', color: urgentes > 0 ? 'text-red-400' : 'text-text-primary',
+            },
+            {
+              label: 'Receita do mês',
+              value: loading ? '—' : fmt(resumo?.receita),
+              sub: loading ? null : `Lucro: ${fmt(resumo?.lucro_real)}`,
+              icon: DollarSign, href: '/financeiro', color: 'text-gradient-red',
+            },
+          ].map(({ label, value, sub, icon: Icon, href, color }) => (
+            <Link key={label} href={href} className="group p-5 md:p-6 hover:bg-white/[0.02] transition-colors">
+              <div className="flex items-start justify-between mb-3">
+                <div className="w-8 h-8 rounded-lg bg-white/[0.04] border border-border flex items-center justify-center">
+                  <Icon className="w-4 h-4 text-text-muted" strokeWidth={1.8} />
+                </div>
+                <ArrowUpRight className="w-3.5 h-3.5 text-text-dim opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+              <p className="stat-label mb-1.5">{label}</p>
+              <p className={cn('font-mono text-2xl md:text-3xl font-bold tabular-nums', color)}>
+                {value}
+              </p>
+              {sub && <p className="text-xs text-text-muted mt-1.5 font-medium">{sub}</p>}
+            </Link>
+          ))}
         </div>
-      )}
-
-      {/* Stats row */}
-      <div className="flex gap-3 overflow-x-auto scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
-        {loading ? (
-          Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 flex-1 min-w-[140px]" />)
-        ) : (
-          <>
-            <StatCard
-              label="Em estoque"
-              value={String(estoque?.qtd_veiculos ?? '—')}
-              sub={estoque ? `R$ ${(estoque.total_investido / 1000).toFixed(0)}k investidos` : undefined}
-            />
-            <StatCard
-              label="Leads hoje"
-              value={String(leads.length)}
-              sub={leads.length === 1 ? '1 recebido' : `${leads.length} recebidos`}
-            />
-            <StatCard
-              label="Alertas"
-              value={String(alertas.length)}
-              sub={urgentes > 0 ? `${urgentes} urgentes` : 'Tudo em dia'}
-            />
-            <StatCard
-              label="Receita mês"
-              value={fmt(resumo?.receita)}
-              sub={`Lucro: ${fmt(resumo?.lucro_real)}`}
-              accent
-            />
-          </>
-        )}
       </div>
 
-      {/* Main grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* ── Body ── */}
+      <div className="p-5 md:p-8 grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-[1440px] mx-auto">
 
-        {/* Estoque recente */}
-        <div className="lg:col-span-2 bg-card border border-border rounded-xl overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
-            <div className="flex items-center gap-2.5">
-              <Car className="w-4 h-4 text-text-muted" strokeWidth={1.8} />
-              <span className="text-sm font-semibold text-text-primary">Estoque disponível</span>
-              {!loading && (
-                <span className="badge bg-white/5 text-text-muted border border-border">
-                  {veiculos.length}
-                </span>
+        {/* Estoque disponível — ocupa 2/3 */}
+        <div className="lg:col-span-2">
+          <div className="flex items-center justify-between mb-4">
+            <div className="chapter-heading mb-0">
+              <span className="chapter-bar bg-primary" />
+              <span className="chapter-title">Estoque Disponível</span>
+              {!loading && veiculos.length > 0 && (
+                <span className="badge bg-white/5 border border-border text-text-muted ml-1">{veiculos.length}</span>
               )}
             </div>
-            <Link
-              href="/estoque"
-              className="text-xs text-text-muted hover:text-primary transition-colors flex items-center gap-1 font-medium"
-            >
-              Ver todos <ArrowRight className="w-3 h-3" />
-            </Link>
+            <div className="flex items-center gap-3">
+              <Link href="/estoque/novo" className="btn-primary !py-2 !text-xs">
+                <Plus className="w-3.5 h-3.5" /> Novo
+              </Link>
+              <Link href="/estoque" className="text-xs text-text-muted hover:text-primary transition-colors font-semibold">
+                Ver todos →
+              </Link>
+            </div>
           </div>
 
           {loading ? (
-            <div className="p-5 space-y-2.5">
-              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-11" />)}
+            <div className="space-y-2">
+              {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12" />)}
             </div>
           ) : veiculos.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-14 px-5">
-              <div className="w-12 h-12 rounded-2xl bg-white/[0.03] border border-border flex items-center justify-center mb-3">
-                <Car className="w-5 h-5 text-text-dim" strokeWidth={1.5} />
+            <div className="recipe-card flex flex-col items-center justify-center py-16">
+              <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-border flex items-center justify-center mb-4">
+                <Car className="w-7 h-7 text-text-dim" strokeWidth={1.5} />
               </div>
-              <p className="text-text-muted text-sm font-medium">Nenhum veículo disponível</p>
+              <p className="text-text-muted text-sm font-semibold">Nenhum veículo disponível</p>
               <Link href="/estoque/novo" className="text-primary text-xs hover:underline mt-2 font-medium">
                 Cadastrar primeiro veículo →
               </Link>
             </div>
           ) : (
-            <div className="divide-y divide-border">
-              {veiculos.slice(0, 8).map(v => (
-                <Link
-                  key={v.id}
-                  href={`/estoque/${v.id}`}
-                  className="flex items-center justify-between px-5 py-3 hover:bg-white/[0.02] transition-colors group"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-lg bg-white/[0.04] border border-border flex items-center justify-center flex-shrink-0">
-                      <Car className="w-3.5 h-3.5 text-text-dim" strokeWidth={1.5} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-text-primary text-sm font-medium group-hover:text-primary transition-colors truncate">
-                        {v.marca} {v.modelo} {v.ano}
-                      </p>
-                      <p className="text-text-muted text-xs font-mono">{v.placa} · {fmtKm(v.km)} · {v.cor}</p>
-                    </div>
-                  </div>
-                  <div className="text-right ml-4 flex-shrink-0">
-                    <p className="text-text-primary text-sm font-semibold font-mono">{fmt(v.preco_venda)}</p>
-                    <p className={cn(
-                      'text-xs font-medium font-mono flex items-center gap-0.5 justify-end',
-                      v.lucro_estimado >= 0 ? 'text-green-400' : 'text-red-400',
-                    )}>
-                      <TrendingUp className="w-3 h-3" />
-                      {fmt(v.lucro_estimado)}
-                    </p>
-                  </div>
-                </Link>
-              ))}
-              {veiculos.length > 8 && (
-                <div className="px-5 py-3 text-center">
-                  <Link href="/estoque" className="text-text-muted text-xs hover:text-primary transition-colors font-medium">
-                    + {veiculos.length - 8} veículos no estoque
+            <div className="recipe-card">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="tbl-th">Veículo</th>
+                    <th className="tbl-th hidden md:table-cell">Km / Cor</th>
+                    <th className="tbl-th-right">Preço</th>
+                    <th className="tbl-th-right hidden sm:table-cell">Lucro est.</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {veiculos.slice(0, 10).map(v => (
+                    <Link key={v.id} href={`/estoque/${v.id}`} legacyBehavior>
+                      <tr className="hover:bg-white/[0.02] transition-colors cursor-pointer group">
+                        <td className="px-4 py-3.5">
+                          <p className="text-sm font-semibold text-text-primary group-hover:text-primary transition-colors">
+                            {v.marca} {v.modelo} <span className="font-normal text-text-muted">{v.ano}</span>
+                          </p>
+                          <p className="text-xs font-mono text-text-muted mt-0.5">{v.placa}</p>
+                        </td>
+                        <td className="px-4 py-3.5 hidden md:table-cell">
+                          <p className="text-xs text-text-muted font-mono">{fmtKm(v.km)}</p>
+                          <p className="text-xs text-text-dim capitalize mt-0.5">{v.cor}</p>
+                        </td>
+                        <td className="px-4 py-3.5 text-right">
+                          <p className="text-sm font-semibold font-mono text-text-primary">{fmt(v.preco_venda)}</p>
+                        </td>
+                        <td className="px-4 py-3.5 text-right hidden sm:table-cell">
+                          <span className={cn(
+                            'text-xs font-semibold font-mono flex items-center gap-0.5 justify-end',
+                            v.lucro_estimado >= 0 ? 'text-green-400' : 'text-red-400',
+                          )}>
+                            <TrendingUp className="w-3 h-3" /> {fmt(v.lucro_estimado)}
+                          </span>
+                        </td>
+                      </tr>
+                    </Link>
+                  ))}
+                </tbody>
+              </table>
+              {veiculos.length > 10 && (
+                <div className="border-t border-border px-4 py-3">
+                  <Link href="/estoque" className="text-xs text-text-muted hover:text-primary transition-colors font-medium">
+                    + {veiculos.length - 10} veículos no estoque
                   </Link>
                 </div>
               )}
@@ -212,138 +198,111 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* Alertas */}
-        <div className="bg-card border border-border rounded-xl overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
-            <div className="flex items-center gap-2.5">
-              <Bell className="w-4 h-4 text-text-muted" strokeWidth={1.8} />
-              <span className="text-sm font-semibold text-text-primary">Alertas</span>
-              {urgentes > 0 && (
-                <span className="badge bg-red-400/10 text-red-400">
-                  {urgentes} urgente{urgentes > 1 ? 's' : ''}
-                </span>
-              )}
-            </div>
-            <Link href="/alertas" className="text-xs text-text-muted hover:text-primary transition-colors font-medium">
-              Ver todos
-            </Link>
-          </div>
+        {/* Coluna direita: Leads + Alertas */}
+        <div className="space-y-6">
 
-          {loading ? (
-            <div className="p-5 space-y-2.5">
-              {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14" />)}
-            </div>
-          ) : alertas.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 px-5">
-              <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center mb-3">
-                <Bell className="w-5 h-5 text-accent" strokeWidth={1.8} />
+          {/* Leads hoje */}
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div className="chapter-heading mb-0">
+                <span className="chapter-bar bg-blue-400" />
+                <span className="chapter-title">Leads Hoje</span>
+                {!loading && leads.length > 0 && (
+                  <span className="badge bg-blue-400/10 text-blue-400 ml-1">{leads.length}</span>
+                )}
               </div>
-              <p className="text-text-primary text-sm font-semibold">Tudo em dia</p>
-              <p className="text-text-muted text-xs mt-0.5">Sem alertas ativos</p>
+              <Link href="/crm" className="text-xs text-text-muted hover:text-primary transition-colors font-semibold">
+                CRM →
+              </Link>
             </div>
-          ) : (
-            <div className="divide-y divide-border overflow-y-auto max-h-[340px]">
-              {alertas.map((a, i) => (
-                <Link
-                  key={i}
-                  href={`/estoque/${a.veiculo_id}`}
-                  className="flex items-start gap-3 px-5 py-3.5 hover:bg-white/[0.02] transition-colors"
-                >
-                  <div className={cn(
-                    'w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 mt-0.5',
-                    a.urgencia === 'alta' ? 'bg-red-400/10' : 'bg-yellow-400/10',
-                  )}>
-                    <AlertTriangle className={cn(
-                      'w-3 h-3',
-                      a.urgencia === 'alta' ? 'text-red-400' : 'text-yellow-400',
-                    )} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-text-primary text-xs font-medium leading-snug">{a.descricao}</p>
-                    <p className="text-primary text-xs mt-0.5 font-mono">{a.placa}</p>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
 
-      {/* Leads recentes */}
-      <div className="bg-card border border-border rounded-xl overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
-          <div className="flex items-center gap-2.5">
-            <Users className="w-4 h-4 text-text-muted" strokeWidth={1.8} />
-            <span className="text-sm font-semibold text-text-primary">Leads hoje</span>
-            {!loading && (
-              <span className="badge bg-white/5 text-text-muted border border-border">{leads.length}</span>
+            {loading ? (
+              <div className="space-y-2">
+                {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14" />)}
+              </div>
+            ) : leads.length === 0 ? (
+              <div className="recipe-card py-8 text-center">
+                <Users className="w-7 h-7 text-text-dim mx-auto mb-2" strokeWidth={1.5} />
+                <p className="text-xs text-text-muted font-medium">Nenhum lead hoje</p>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {leads.slice(0, 5).map(l => (
+                  <Link key={l.id} href="/crm" className="flex items-center gap-3 bg-card border border-border rounded-xl px-4 py-3 hover:bg-card-hover hover:border-border-bright transition-all">
+                    <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
+                      <span className="text-primary text-xs font-bold">
+                        {(l.nome || l.contato).charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-text-primary truncate">{l.nome || l.contato}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        {l.canal === 'whatsapp'
+                          ? <Phone className="w-3 h-3 text-green-400" />
+                          : <Instagram className="w-3 h-3 text-pink-400" />
+                        }
+                        <span className="text-2xs text-text-muted uppercase font-semibold tracking-wide">
+                          {FUNIL_LABEL[l.status_funil]}
+                        </span>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+                {leads.length > 5 && (
+                  <Link href="/crm" className="block text-center text-xs text-text-muted hover:text-primary transition-colors font-medium pt-1">
+                    + {leads.length - 5} mais
+                  </Link>
+                )}
+              </div>
             )}
           </div>
-          <Link
-            href="/crm"
-            className="text-xs text-text-muted hover:text-primary transition-colors flex items-center gap-1 font-medium"
-          >
-            Ver CRM <ArrowRight className="w-3 h-3" />
-          </Link>
-        </div>
 
-        {loading ? (
-          <div className="p-5 space-y-2.5">
-            {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-11" />)}
-          </div>
-        ) : leads.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10">
-            <Users className="w-9 h-9 text-text-dim mb-3" strokeWidth={1.5} />
-            <p className="text-text-muted text-sm font-medium">Nenhum lead hoje</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[480px]">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left px-5 py-3 text-2xs font-semibold text-text-muted uppercase tracking-widest">Lead</th>
-                  <th className="text-left px-4 py-3 text-2xs font-semibold text-text-muted uppercase tracking-widest hidden sm:table-cell">Canal</th>
-                  <th className="text-left px-4 py-3 text-2xs font-semibold text-text-muted uppercase tracking-widest">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {leads.map(l => (
-                  <tr key={l.id} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-7 h-7 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
-                          <span className="text-primary text-xs font-bold">
-                            {(l.nome || l.contato).charAt(0).toUpperCase()}
-                          </span>
-                        </div>
-                        <div>
-                          <p className="text-text-primary text-sm font-medium">{l.nome || l.contato}</p>
-                          {l.atendimento_humano && (
-                            <span className="badge bg-blue-400/10 text-blue-400">Humano</span>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 hidden sm:table-cell">
-                      <div className="flex items-center gap-1.5">
-                        {l.canal === 'whatsapp'
-                          ? <Phone className="w-3.5 h-3.5 text-green-400" />
-                          : <Instagram className="w-3.5 h-3.5 text-pink-400" />
-                        }
-                        <span className="text-text-muted text-xs font-medium capitalize">{l.canal}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="badge bg-white/[0.04] text-text-muted border border-border">
-                        {FUNIL_LABEL[l.status_funil]}
-                      </span>
-                    </td>
-                  </tr>
+          {/* Alertas */}
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div className="chapter-heading mb-0">
+                <span className={cn('chapter-bar', urgentes > 0 ? 'bg-red-400' : 'bg-yellow-400')} />
+                <span className="chapter-title">Alertas</span>
+                {urgentes > 0 && (
+                  <span className="badge bg-red-400/10 text-red-400 ml-1">{urgentes} urgente{urgentes > 1 ? 's' : ''}</span>
+                )}
+              </div>
+              <Link href="/alertas" className="text-xs text-text-muted hover:text-primary transition-colors font-semibold">
+                Ver todos →
+              </Link>
+            </div>
+
+            {loading ? (
+              <div className="space-y-2">
+                {Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-14" />)}
+              </div>
+            ) : alertas.length === 0 ? (
+              <div className="recipe-card py-8 text-center">
+                <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center mx-auto mb-2">
+                  <Bell className="w-4 h-4 text-accent" strokeWidth={1.8} />
+                </div>
+                <p className="text-xs text-text-muted font-medium">Tudo em dia</p>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {alertas.slice(0, 4).map((a, i) => (
+                  <Link key={i} href={`/estoque/${a.veiculo_id}`} className="flex items-start gap-3 bg-card border border-border rounded-xl px-4 py-3 hover:bg-card-hover transition-all">
+                    <div className={cn(
+                      'w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5',
+                      a.urgencia === 'alta' ? 'bg-red-400/10' : 'bg-yellow-400/10',
+                    )}>
+                      <AlertTriangle className={cn('w-3.5 h-3.5', a.urgencia === 'alta' ? 'text-red-400' : 'text-yellow-400')} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-text-primary leading-snug">{a.descricao}</p>
+                      <p className="text-xs font-mono text-primary mt-0.5">{a.placa}</p>
+                    </div>
+                  </Link>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

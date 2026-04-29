@@ -16,6 +16,13 @@ const STATUS_DOT: Record<string, string> = {
   inativo:    'bg-text-muted',
 };
 
+const STATUS_BADGE_COLOR: Record<string, string> = {
+  disponivel: 'bg-green-400/10 text-green-400 border-green-400/20',
+  reservado:  'bg-yellow-400/10 text-yellow-400 border-yellow-400/20',
+  vendido:    'bg-blue-400/10 text-blue-400 border-blue-400/20',
+  inativo:    'bg-white/5 text-text-muted border-border',
+};
+
 type Tab = 'dados' | 'custos' | 'vender';
 
 export default function VeiculoDetailPage() {
@@ -30,19 +37,19 @@ export default function VeiculoDetailPage() {
   const [editForm, setEditForm]         = useState<Record<string, string>>({});
   const [salvandoEdit, setSalvandoEdit] = useState(false);
 
-  const [custoForm, setCustoForm]           = useState({ tipo: '', valor: '', descricao: '' });
-  const [salvandoCusto, setSalvandoCusto]   = useState(false);
+  const [custoForm, setCustoForm]         = useState({ tipo: '', valor: '', descricao: '' });
+  const [salvandoCusto, setSalvandoCusto] = useState(false);
 
-  const [vendaForm, setVendaForm]           = useState(() => {
+  const [vendaForm, setVendaForm] = useState(() => {
     const hoje = new Date();
     const data = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}-${String(hoje.getDate()).padStart(2,'0')}`;
     return { preco_venda_final: '', data_venda: data, nome_comprador: '', nome_vendedor: '', forma_pagamento: '' };
   });
-  const [salvandoVenda, setSalvandoVenda]   = useState(false);
-  const [reservando, setReservando]         = useState(false);
-  const [editandoDoc, setEditandoDoc]       = useState(false);
-  const [salvandoDoc, setSalvandoDoc]       = useState(false);
-  const [vendedoresCad, setVendedoresCad]   = useState<string[]>([]);
+  const [salvandoVenda, setSalvandoVenda] = useState(false);
+  const [reservando, setReservando]       = useState(false);
+  const [editandoDoc, setEditandoDoc]     = useState(false);
+  const [salvandoDoc, setSalvandoDoc]     = useState(false);
+  const [vendedoresCad, setVendedoresCad] = useState<string[]>([]);
 
   useEffect(() => {
     api.vendedores.cadastro.listar()
@@ -75,7 +82,6 @@ export default function VeiculoDetailPage() {
         obs: editForm.obs || undefined,
         tipo: editForm.tipo || undefined,
       });
-      // Rebusca da view para atualizar lucro estimado e outros campos calculados
       const atualizado = await api.veiculos.buscar(id);
       setVeiculo(p => p ? { ...p, ...atualizado } : p);
       setEditando(false);
@@ -178,7 +184,7 @@ export default function VeiculoDetailPage() {
   }
 
   if (loading) return (
-    <div className="p-4 md:p-6 max-w-2xl mx-auto animate-pulse space-y-4">
+    <div className="p-5 md:p-8 max-w-2xl mx-auto animate-pulse space-y-4">
       <div className="h-7 bg-white/5 rounded-xl w-48" />
       <div className="aspect-video bg-white/5 rounded-2xl" />
       <div className="grid grid-cols-3 gap-3">
@@ -189,9 +195,11 @@ export default function VeiculoDetailPage() {
 
   if (notFound || !veiculo) return (
     <div className="p-6 text-center">
-      <Car size={48} className="mx-auto text-border mb-3" />
-      <p className="text-sm text-text-muted mb-4">Veículo não encontrado.</p>
-      <Link href="/estoque" className="text-sm text-primary font-medium hover:underline">← Voltar ao estoque</Link>
+      <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-border flex items-center justify-center mx-auto mb-4">
+        <Car size={28} className="text-text-dim" strokeWidth={1.5} />
+      </div>
+      <p className="text-sm text-text-muted mb-4 font-medium">Veículo não encontrado.</p>
+      <Link href="/estoque" className="text-sm text-primary font-semibold hover:underline">← Voltar ao estoque</Link>
     </div>
   );
 
@@ -203,498 +211,523 @@ export default function VeiculoDetailPage() {
   const TABS: { id: Tab; label: string }[] = [
     { id: 'dados',  label: 'Dados' },
     { id: 'custos', label: `Custos${veiculo.custos.length > 0 ? ` (${veiculo.custos.length})` : ''}` },
-    ...(!bloqueado ? [{ id: 'vender' as Tab, label: 'Vender' }] : []),
+    ...(!bloqueado ? [{ id: 'vender' as Tab, label: 'Registrar Venda' }] : []),
   ];
 
   return (
-    <div className="p-4 md:p-6 max-w-2xl mx-auto space-y-4 animate-fade-in">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <Link href="/estoque" className="p-1 -ml-1 text-text-muted hover:text-text-primary transition-colors">
-          <ChevronLeft size={22} />
-        </Link>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-lg font-bold text-text-primary truncate">{veiculo.marca} {veiculo.modelo}</h1>
-          <p className="text-xs font-mono text-text-muted">{veiculo.placa}</p>
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <div className="flex items-center gap-1.5 bg-background/80 px-2.5 py-1 rounded-full border border-border">
-            <span className={cn('w-1.5 h-1.5 rounded-full', STATUS_DOT[veiculo.status] ?? 'bg-text-muted')} />
-            <span className="text-xs font-medium text-text-primary">{STATUS_LABEL[veiculo.status]}</span>
+    <div className="animate-fade-in">
+
+      {/* ── Page header ── */}
+      <div className="page-hero">
+        <div className="flex items-center gap-3">
+          <Link href="/estoque" className="p-1.5 -ml-1 text-text-muted hover:text-text-primary transition-colors rounded-lg hover:bg-white/5 flex-shrink-0">
+            <ChevronLeft size={20} />
+          </Link>
+          <div className="flex-1 min-w-0">
+            <p className="breadcrumb">
+              <Car size={10} />
+              Painel / Estoque / {veiculo.placa}
+            </p>
+            <h1 className="text-xl font-bold text-text-primary truncate">{veiculo.marca} {veiculo.modelo} <span className="text-text-muted font-normal">{veiculo.ano}</span></h1>
           </div>
-          {isDisponivel && (
-            <button
-              onClick={reservar}
-              disabled={reservando}
-              className="flex items-center gap-1 px-2.5 py-1 bg-yellow-400/10 border border-yellow-400/20 text-yellow-400 text-xs font-semibold rounded-full hover:bg-yellow-400/20 transition-colors disabled:opacity-50"
-            >
-              <Lock size={10} />
-              {reservando ? '...' : 'Reservar'}
-            </button>
-          )}
-          {isReservado && (
-            <button
-              onClick={liberar}
-              disabled={reservando}
-              className="flex items-center gap-1 px-2.5 py-1 bg-white/5 border border-border text-text-muted text-xs font-semibold rounded-full hover:bg-white/10 transition-colors disabled:opacity-50"
-            >
-              <Unlock size={10} />
-              {reservando ? '...' : 'Liberar'}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Galeria de fotos */}
-      <FotoGaleria
-        veiculoId={id}
-        fotos={veiculo.fotos}
-        bloqueado={bloqueado}
-        onFotosChange={fotos => setVeiculo(p => p ? { ...p, fotos } : p)}
-      />
-
-      {/* Resumo financeiro */}
-      <div className="grid grid-cols-3 gap-3">
-        <FinCard label="Investimento" value={fmt(veiculo.investimento_total)} />
-        <FinCard label="Venda"        value={fmt(veiculo.preco_venda)} />
-        <FinCard
-          label={isVendido ? 'Lucro real' : 'Lucro est.'}
-          value={fmt(isVendido ? veiculo.lucro_real : veiculo.lucro_estimado)}
-          green={(isVendido ? veiculo.lucro_real : veiculo.lucro_estimado) ?? 0}
-        />
-      </div>
-
-      {/* Tabs */}
-      <div className="flex gap-1 bg-white/5 border border-border rounded-xl p-1">
-        {TABS.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={cn(
-              'flex-1 py-2 text-sm font-medium rounded-lg transition-colors',
-              tab === t.id
-                ? 'bg-card-hover text-text-primary shadow-sm'
-                : 'text-text-muted hover:text-text-primary',
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* ── Tab: Dados ── */}
-      {tab === 'dados' && (
-        <div className="bg-card border border-border rounded-2xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-            <span className="text-sm font-semibold text-text-primary">Dados do veículo</span>
-            {!bloqueado && (
-              <div className="flex items-center gap-2">
-                {editando && (
-                  <button onClick={() => setEditando(false)} className="p-1 text-text-muted hover:text-text-primary">
-                    <X size={16} />
-                  </button>
-                )}
-                <button
-                  onClick={() => editando ? salvarEdicao() : setEditando(true)}
-                  disabled={salvandoEdit}
-                  className={cn(
-                    'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors',
-                    editando
-                      ? 'bg-green-400/10 text-green-400 hover:bg-green-400/20 border border-green-400/20'
-                      : 'bg-white/5 border border-border text-text-muted hover:bg-white/10 hover:text-text-primary',
-                  )}
-                >
-                  {editando
-                    ? <><Check size={13} /> {salvandoEdit ? '...' : 'Salvar'}</>
-                    : <><Edit2 size={13} /> Editar</>
-                  }
-                </button>
-              </div>
-            )}
-          </div>
-
-          {editando ? (
-            <div className="p-4 grid grid-cols-2 gap-3">
-              {[
-                ['placa',  'Placa',    'text'],
-                ['marca',  'Marca',    'text'],
-                ['modelo', 'Modelo',   'text'],
-                ['ano',    'Ano',      'number'],
-                ['cor',    'Cor',      'text'],
-                ['km',     'KM',       'number'],
-                ['preco_compra', 'Compra (R$)', 'number'],
-                ['preco_venda',  'Venda (R$)',  'number'],
-              ].map(([k, label, type]) => (
-                <div key={k}>
-                  <label className="block text-xs font-medium text-text-muted mb-1">{label}</label>
-                  <input
-                    type={type}
-                    value={editForm[k]}
-                    onChange={e => setEditForm(p => ({ ...p, [k]: e.target.value }))}
-                    className={INPUT}
-                  />
-                </div>
-              ))}
-              <div>
-                <label className="block text-xs font-medium text-text-muted mb-1">Tipo</label>
-                <select
-                  value={editForm.tipo}
-                  onChange={e => setEditForm(p => ({ ...p, tipo: e.target.value }))}
-                  className={INPUT}
-                >
-                  <option value="">—</option>
-                  {['sedan','hatch','SUV','picape','crossover','minivan','esportivo'].map(t => (
-                    <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-span-2">
-                <label className="block text-xs font-medium text-text-muted mb-1">Observações</label>
-                <textarea
-                  rows={2}
-                  value={editForm.obs}
-                  onChange={e => setEditForm(p => ({ ...p, obs: e.target.value }))}
-                  className={INPUT}
-                />
-              </div>
-            </div>
-          ) : (
-            <div className="p-4 grid grid-cols-2 gap-4">
-              {([
-                ['Placa',  veiculo.placa,            true],
-                ['Ano',    String(veiculo.ano),       false],
-                ['Marca',  veiculo.marca,              false],
-                ['Modelo', veiculo.modelo,             false],
-                ['Cor',    veiculo.cor,                false],
-                ['KM',     fmtKm(veiculo.km),          false],
-                ['Compra', fmt(veiculo.preco_compra),  false],
-                ['Venda',  fmt(veiculo.preco_venda),   false],
-              ] as [string, string, boolean][]).map(([l, v, mono]) => (
-                <div key={l}>
-                  <p className="text-xs text-text-muted">{l}</p>
-                  <p className={cn('text-sm font-medium text-text-primary mt-0.5', mono && 'font-mono')}>{v}</p>
-                </div>
-              ))}
-              {veiculo.tipo && (
-                <div>
-                  <p className="text-xs text-text-muted">Tipo</p>
-                  <p className="text-sm font-medium text-text-primary mt-0.5 capitalize">{veiculo.tipo}</p>
-                </div>
-              )}
-              {veiculo.obs && (
-                <div className="col-span-2">
-                  <p className="text-xs text-text-muted">Observações</p>
-                  <p className="text-sm text-text-primary mt-0.5">{veiculo.obs}</p>
-                </div>
-              )}
-              {isVendido && veiculo.preco_venda_final && (
-                <>
-                  <div>
-                    <p className="text-xs text-text-muted">Vendido por</p>
-                    <p className="text-sm font-semibold text-green-400">{fmt(veiculo.preco_venda_final)}</p>
-                  </div>
-                  {veiculo.data_venda && (
-                    <div>
-                      <p className="text-xs text-text-muted">Data da venda</p>
-                      <p className="text-sm font-medium text-text-primary">
-                        {veiculo.data_venda.split('-').reverse().join('/')}
-                      </p>
-                    </div>
-                  )}
-                  {veiculo.forma_pagamento && (
-                    <div>
-                      <p className="text-xs text-text-muted">Pagamento</p>
-                      <p className="text-sm font-medium text-text-primary">{veiculo.forma_pagamento}</p>
-                    </div>
-                  )}
-                  {veiculo.nome_vendedor && (
-                    <div>
-                      <p className="text-xs text-text-muted">Vendedor</p>
-                      <p className="text-sm font-medium text-text-primary">{veiculo.nome_vendedor}</p>
-                    </div>
-                  )}
-                  {veiculo.nome_comprador && (
-                    <div>
-                      <p className="text-xs text-text-muted">Comprador</p>
-                      <p className="text-sm font-medium text-text-primary">{veiculo.nome_comprador}</p>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Documentação */}
-          <div className="border-t border-border px-4 py-4">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-semibold text-text-muted uppercase tracking-wide">Documentação</p>
-              {!bloqueado && (
-                <button
-                  onClick={() => setEditandoDoc(v => !v)}
-                  className="text-xs text-text-muted hover:text-text-primary transition-colors"
-                >
-                  {editandoDoc ? 'Fechar' : <><Edit2 size={11} className="inline mr-1" />Editar</>}
-                </button>
-              )}
-            </div>
-            {veiculo.documentacao ? (
-              <div className="grid grid-cols-2 gap-2">
-                {/* IPVA — mostra data e permite editar/limpar no modo edição */}
-                <div className="col-span-2">
-                  {editandoDoc ? (
-                    <div className="flex items-center gap-2 px-1 py-1">
-                      <AlertCircle size={14} className="text-yellow-400 flex-shrink-0" />
-                      <span className="text-xs text-text-muted">IPVA vence em</span>
-                      <input
-                        type="month"
-                        defaultValue={veiculo.documentacao.ipva_vencimento ? veiculo.documentacao.ipva_vencimento.slice(0, 7) : ''}
-                        onChange={e => {
-                          const val = e.target.value; // YYYY-MM
-                          const patch = val ? { ipva_vencimento: `${val}-01` } : { ipva_vencimento: null };
-                          salvarDocumentacao(patch);
-                        }}
-                        className="px-2 py-1 bg-white/5 border border-border rounded-lg text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                      />
-                      {veiculo.documentacao.ipva_vencimento && (
-                        <button
-                          onClick={() => salvarDocumentacao({ ipva_vencimento: null })}
-                          className="text-xs text-red-400 hover:underline ml-1"
-                        >
-                          Limpar
-                        </button>
-                      )}
-                    </div>
-                  ) : veiculo.documentacao.ipva_vencimento ? (() => {
-                    const parts = veiculo.documentacao.ipva_vencimento.split('-');
-                    const mesAno = `${parts[1]}/${parts[0]}`;
-                    const vencido = new Date(veiculo.documentacao.ipva_vencimento + 'T12:00:00') < new Date();
-                    return (
-                      <div className="flex items-center gap-2 px-1 py-1">
-                        <AlertCircle size={14} className={vencido ? 'text-red-400' : 'text-yellow-400'} />
-                        <span className="text-sm text-text-primary">IPVA vence em {mesAno}</span>
-                      </div>
-                    );
-                  })() : null}
-                </div>
-                {([
-                  ['transferencia_ok', 'Transferência'],
-                  ['laudo_vistoria_ok', 'Laudo vistoria'],
-                  ['dut_ok', 'DUT'],
-                  ['crlv_ok', 'CRLV'],
-                ] as [keyof DocumentacaoVeiculo, string][]).map(([key, label]) => {
-                  const ok = veiculo.documentacao![key] as boolean;
-                  return (
-                    <button
-                      key={key}
-                      disabled={!editandoDoc || salvandoDoc}
-                      onClick={() => salvarDocumentacao({ [key]: !ok })}
-                      className={cn(
-                        'flex items-center gap-2 text-left transition-colors rounded-lg',
-                        editandoDoc ? 'cursor-pointer hover:bg-white/5 px-2 py-1 -mx-2' : 'cursor-default',
-                      )}
-                    >
-                      {ok
-                        ? <CheckCircle2 size={15} className="text-green-400 flex-shrink-0" />
-                        : <AlertCircle  size={15} className="text-yellow-400 flex-shrink-0" />}
-                      <span className={cn('text-sm', ok ? 'text-text-primary' : 'text-text-muted')}>{label}</span>
-                      {editandoDoc && (
-                        <span className={cn('ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full', ok ? 'bg-green-400/10 text-green-400' : 'bg-white/5 text-text-muted')}>
-                          {ok ? 'OK' : 'Pendente'}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="text-sm text-text-muted">Sem documentação cadastrada.</p>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ── Tab: Custos ── */}
-      {tab === 'custos' && (
-        <div className="bg-card border border-border rounded-2xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-            <div>
-              <span className="text-sm font-semibold text-text-primary">Custos</span>
-              <span className="ml-2 text-xs text-text-muted">{fmt(veiculo.total_custos)} total</span>
-            </div>
-          </div>
-
-          {!bloqueado && (
-            <form onSubmit={adicionarCusto} className="px-4 py-3 border-b border-border bg-white/5 space-y-2">
-              <p className="text-xs font-semibold text-text-muted uppercase tracking-wide">Lançar custo</p>
-              <div className="grid grid-cols-2 gap-2">
-                <input
-                  required
-                  value={custoForm.tipo}
-                  onChange={e => setCustoForm(p => ({ ...p, tipo: e.target.value }))}
-                  placeholder="Tipo (ex: IPVA, Reparo)"
-                  className={INPUT}
-                />
-                <input
-                  required
-                  value={custoForm.valor}
-                  onChange={e => setCustoForm(p => ({ ...p, valor: e.target.value }))}
-                  placeholder="Valor (ex: 500 ou 1.500,00)"
-                  className={INPUT}
-                />
-              </div>
-              <input
-                value={custoForm.descricao}
-                onChange={e => setCustoForm(p => ({ ...p, descricao: e.target.value }))}
-                placeholder="Descrição (opcional)"
-                className={INPUT}
-              />
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className={cn(
+              'flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border',
+              STATUS_BADGE_COLOR[veiculo.status] ?? 'bg-white/5 text-text-muted border-border',
+            )}>
+              <span className={cn('w-1.5 h-1.5 rounded-full', STATUS_DOT[veiculo.status] ?? 'bg-text-muted')} />
+              {STATUS_LABEL[veiculo.status]}
+            </span>
+            {isDisponivel && (
               <button
-                type="submit"
-                disabled={salvandoCusto}
-                className="w-full py-2 bg-primary hover:bg-primary-light text-white text-sm font-semibold rounded-xl disabled:opacity-60 transition-colors shadow-sm shadow-primary/20"
+                onClick={reservar}
+                disabled={reservando}
+                className="flex items-center gap-1 px-2.5 py-1 bg-yellow-400/10 border border-yellow-400/20 text-yellow-400 text-xs font-semibold rounded-full hover:bg-yellow-400/20 transition-colors disabled:opacity-50"
               >
-                {salvandoCusto ? 'Salvando...' : 'Lançar custo'}
+                <Lock size={10} />
+                {reservando ? '...' : 'Reservar'}
               </button>
-            </form>
-          )}
+            )}
+            {isReservado && (
+              <button
+                onClick={liberar}
+                disabled={reservando}
+                className="flex items-center gap-1 px-2.5 py-1 bg-white/5 border border-border text-text-muted text-xs font-semibold rounded-full hover:bg-white/10 transition-colors disabled:opacity-50"
+              >
+                <Unlock size={10} />
+                {reservando ? '...' : 'Liberar'}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
 
-          {veiculo.custos.length === 0 ? (
-            <p className="px-4 py-6 text-sm text-text-muted text-center">Nenhum custo lançado.</p>
-          ) : (
-            <div className="divide-y divide-border">
-              {veiculo.custos.map(c => (
-                <div key={c.id} className="px-4 py-3 flex items-center gap-3 hover:bg-white/5 transition-colors">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-text-primary">{c.tipo}</p>
-                    {c.descricao && <p className="text-xs text-text-muted truncate">{c.descricao}</p>}
-                    <p className="text-xs text-text-muted">{new Date(c.data_custo).toLocaleDateString('pt-BR')}</p>
-                  </div>
-                  <p className="text-sm font-semibold text-red-400 flex-shrink-0">{fmt(c.valor)}</p>
-                  {!bloqueado && (
-                    <button onClick={() => deletarCusto(c.id)} className="text-text-muted hover:text-red-400 transition-colors p-1">
-                      <Trash2 size={14} />
+      <div className="p-5 md:p-8 max-w-2xl mx-auto space-y-5">
+
+        {/* Galeria de fotos */}
+        <FotoGaleria
+          veiculoId={id}
+          fotos={veiculo.fotos}
+          bloqueado={bloqueado}
+          onFotosChange={fotos => setVeiculo(p => p ? { ...p, fotos } : p)}
+        />
+
+        {/* Resumo financeiro */}
+        <div className="grid grid-cols-3 gap-3">
+          <FinCard label="Investimento" value={fmt(veiculo.investimento_total)} />
+          <FinCard label="Preço de venda" value={fmt(veiculo.preco_venda)} />
+          <FinCard
+            label={isVendido ? 'Lucro real' : 'Lucro estimado'}
+            value={fmt(isVendido ? veiculo.lucro_real : veiculo.lucro_estimado)}
+            green={(isVendido ? veiculo.lucro_real : veiculo.lucro_estimado) ?? 0}
+          />
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-1 bg-white/5 border border-border rounded-xl p-1">
+          {TABS.map(t => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={cn(
+                'flex-1 py-2 text-sm font-semibold rounded-lg transition-colors',
+                tab === t.id
+                  ? 'bg-card-hover text-text-primary shadow-sm'
+                  : 'text-text-muted hover:text-text-primary',
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Tab: Dados ── */}
+        {tab === 'dados' && (
+          <div className="recipe-card">
+            <div className="recipe-card-header">
+              <div className="flex items-center gap-2.5">
+                <span className="w-[3px] h-5 rounded-full bg-primary flex-shrink-0" />
+                <span className="text-sm font-bold text-text-primary">Dados do Veículo</span>
+              </div>
+              {!bloqueado && (
+                <div className="flex items-center gap-2">
+                  {editando && (
+                    <button onClick={() => setEditando(false)} className="p-1 text-text-muted hover:text-text-primary">
+                      <X size={16} />
                     </button>
                   )}
+                  <button
+                    onClick={() => editando ? salvarEdicao() : setEditando(true)}
+                    disabled={salvandoEdit}
+                    className={cn(
+                      'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors',
+                      editando
+                        ? 'bg-green-400/10 text-green-400 hover:bg-green-400/20 border border-green-400/20'
+                        : 'bg-white/5 border border-border text-text-muted hover:bg-white/10 hover:text-text-primary',
+                    )}
+                  >
+                    {editando
+                      ? <><Check size={13} /> {salvandoEdit ? '...' : 'Salvar'}</>
+                      : <><Edit2 size={13} /> Editar</>
+                    }
+                  </button>
                 </div>
-              ))}
+              )}
             </div>
-          )}
-        </div>
-      )}
 
-      {/* ── Reativar (inativo) ── */}
-      {isInativo && (
-        <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
-          <p className="text-sm font-semibold text-text-primary">Veículo inativo</p>
-          <p className="text-xs text-text-muted">Este veículo foi inativado e não aparece no estoque ativo. Você pode reativá-lo para torná-lo disponível novamente.</p>
-          <button
-            onClick={reativar}
-            className="w-full py-2.5 bg-green-400/10 hover:bg-green-400/20 text-green-400 border border-green-400/20 font-semibold rounded-xl text-sm transition-colors"
-          >
-            Reativar veículo
-          </button>
-        </div>
-      )}
-
-      {/* ── Tab: Vender ── */}
-      {tab === 'vender' && !bloqueado && (
-        <div className="space-y-3">
-          <form onSubmit={registrarVenda} className="bg-card border border-border rounded-2xl p-4 space-y-3">
-            <p className="text-sm font-semibold text-text-primary">Registrar venda</p>
-            <div>
-              <label className="block text-xs font-medium text-text-muted mb-1">
-                Preço final de venda (R$) <span className="text-primary">*</span>
-              </label>
-              <input
-                required
-                value={vendaForm.preco_venda_final}
-                onChange={e => setVendaForm(p => ({ ...p, preco_venda_final: e.target.value }))}
-                placeholder={String(veiculo.preco_venda)}
-                className={INPUT}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-text-muted mb-1">Data da venda</label>
-                <input
-                  type="date"
-                  value={vendaForm.data_venda}
-                  onChange={e => setVendaForm(p => ({ ...p, data_venda: e.target.value }))}
-                  className={INPUT}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-text-muted mb-1">Nome do comprador</label>
-                <input
-                  value={vendaForm.nome_comprador}
-                  onChange={e => setVendaForm(p => ({ ...p, nome_comprador: e.target.value }))}
-                  placeholder="Opcional"
-                  className={INPUT}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-text-muted mb-1">Forma de pagamento</label>
-                <select
-                  value={vendaForm.forma_pagamento}
-                  onChange={e => setVendaForm(p => ({ ...p, forma_pagamento: e.target.value }))}
-                  className={INPUT}
-                >
-                  <option value="">Selecionar (opcional)</option>
-                  <option value="À vista">À vista</option>
-                  <option value="Financiamento">Financiamento</option>
-                  <option value="Consórcio">Consórcio</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-text-muted mb-1">Vendedor responsável</label>
-                {vendedoresCad.length > 0 ? (
+            {editando ? (
+              <div className="p-5 grid grid-cols-2 gap-3">
+                {[
+                  ['placa',  'Placa',    'text'],
+                  ['marca',  'Marca',    'text'],
+                  ['modelo', 'Modelo',   'text'],
+                  ['ano',    'Ano',      'number'],
+                  ['cor',    'Cor',      'text'],
+                  ['km',     'KM',       'number'],
+                  ['preco_compra', 'Compra (R$)', 'number'],
+                  ['preco_venda',  'Venda (R$)',  'number'],
+                ].map(([k, label, type]) => (
+                  <div key={k}>
+                    <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">{label}</label>
+                    <input
+                      type={type}
+                      value={editForm[k]}
+                      onChange={e => setEditForm(p => ({ ...p, [k]: e.target.value }))}
+                      className={INPUT}
+                    />
+                  </div>
+                ))}
+                <div>
+                  <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Tipo</label>
                   <select
-                    value={vendaForm.nome_vendedor}
-                    onChange={e => setVendaForm(p => ({ ...p, nome_vendedor: e.target.value }))}
+                    value={editForm.tipo}
+                    onChange={e => setEditForm(p => ({ ...p, tipo: e.target.value }))}
                     className={INPUT}
                   >
-                    <option value="">Selecionar vendedor</option>
-                    {vendedoresCad.map(n => (
-                      <option key={n} value={n}>{n}</option>
+                    <option value="">—</option>
+                    {['sedan','hatch','SUV','picape','crossover','minivan','esportivo'].map(t => (
+                      <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
                     ))}
                   </select>
-                ) : (
-                  <input
-                    value={vendaForm.nome_vendedor}
-                    onChange={e => setVendaForm(p => ({ ...p, nome_vendedor: e.target.value }))}
-                    placeholder="Nome do vendedor"
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Observações</label>
+                  <textarea
+                    rows={2}
+                    value={editForm.obs}
+                    onChange={e => setEditForm(p => ({ ...p, obs: e.target.value }))}
                     className={INPUT}
                   />
+                </div>
+              </div>
+            ) : (
+              <div className="p-5 grid grid-cols-2 gap-4">
+                {([
+                  ['Placa',  veiculo.placa,            true],
+                  ['Ano',    String(veiculo.ano),       false],
+                  ['Marca',  veiculo.marca,              false],
+                  ['Modelo', veiculo.modelo,             false],
+                  ['Cor',    veiculo.cor,                false],
+                  ['KM',     fmtKm(veiculo.km),          false],
+                  ['Compra', fmt(veiculo.preco_compra),  false],
+                  ['Venda',  fmt(veiculo.preco_venda),   false],
+                ] as [string, string, boolean][]).map(([l, v, mono]) => (
+                  <div key={l}>
+                    <p className="text-2xs font-semibold text-text-dim uppercase tracking-widest">{l}</p>
+                    <p className={cn('text-sm font-semibold text-text-primary mt-0.5', mono && 'font-mono')}>{v}</p>
+                  </div>
+                ))}
+                {veiculo.tipo && (
+                  <div>
+                    <p className="text-2xs font-semibold text-text-dim uppercase tracking-widest">Tipo</p>
+                    <p className="text-sm font-semibold text-text-primary mt-0.5 capitalize">{veiculo.tipo}</p>
+                  </div>
+                )}
+                {veiculo.obs && (
+                  <div className="col-span-2">
+                    <p className="text-2xs font-semibold text-text-dim uppercase tracking-widest">Observações</p>
+                    <p className="text-sm text-text-primary mt-0.5">{veiculo.obs}</p>
+                  </div>
+                )}
+                {isVendido && veiculo.preco_venda_final && (
+                  <>
+                    <div>
+                      <p className="text-2xs font-semibold text-text-dim uppercase tracking-widest">Vendido por</p>
+                      <p className="text-sm font-bold text-green-400">{fmt(veiculo.preco_venda_final)}</p>
+                    </div>
+                    {veiculo.data_venda && (
+                      <div>
+                        <p className="text-2xs font-semibold text-text-dim uppercase tracking-widest">Data da venda</p>
+                        <p className="text-sm font-semibold text-text-primary">
+                          {veiculo.data_venda.split('-').reverse().join('/')}
+                        </p>
+                      </div>
+                    )}
+                    {veiculo.forma_pagamento && (
+                      <div>
+                        <p className="text-2xs font-semibold text-text-dim uppercase tracking-widest">Pagamento</p>
+                        <p className="text-sm font-semibold text-text-primary">{veiculo.forma_pagamento}</p>
+                      </div>
+                    )}
+                    {veiculo.nome_vendedor && (
+                      <div>
+                        <p className="text-2xs font-semibold text-text-dim uppercase tracking-widest">Vendedor</p>
+                        <p className="text-sm font-semibold text-text-primary">{veiculo.nome_vendedor}</p>
+                      </div>
+                    )}
+                    {veiculo.nome_comprador && (
+                      <div>
+                        <p className="text-2xs font-semibold text-text-dim uppercase tracking-widest">Comprador</p>
+                        <p className="text-sm font-semibold text-text-primary">{veiculo.nome_comprador}</p>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
-            </div>
-            <button
-              type="submit"
-              disabled={salvandoVenda}
-              className="w-full py-3 bg-green-400/10 hover:bg-green-400/20 text-green-400 border border-green-400/20 font-semibold rounded-xl text-sm transition-colors disabled:opacity-60"
-            >
-              {salvandoVenda ? 'Registrando...' : 'Confirmar venda'}
-            </button>
-          </form>
+            )}
 
-          <button
-            onClick={inativar}
-            className="w-full py-2.5 bg-white/5 border border-border text-text-muted text-sm rounded-xl hover:bg-white/10 hover:text-text-primary transition-colors"
-          >
-            Inativar veículo
-          </button>
-        </div>
-      )}
+            {/* Documentação */}
+            <div className="border-t border-border px-5 py-5">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-[3px] h-5 rounded-full bg-yellow-400 flex-shrink-0" />
+                  <p className="text-xs font-bold text-text-primary uppercase tracking-widest">Documentação</p>
+                </div>
+                {!bloqueado && (
+                  <button
+                    onClick={() => setEditandoDoc(v => !v)}
+                    className="text-xs text-text-muted hover:text-text-primary transition-colors font-medium"
+                  >
+                    {editandoDoc ? 'Fechar' : <><Edit2 size={11} className="inline mr-1" />Editar</>}
+                  </button>
+                )}
+              </div>
+              {veiculo.documentacao ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="col-span-2">
+                    {editandoDoc ? (
+                      <div className="flex items-center gap-2 px-1 py-1">
+                        <AlertCircle size={14} className="text-yellow-400 flex-shrink-0" />
+                        <span className="text-xs text-text-muted">IPVA vence em</span>
+                        <input
+                          type="month"
+                          defaultValue={veiculo.documentacao.ipva_vencimento ? veiculo.documentacao.ipva_vencimento.slice(0, 7) : ''}
+                          onChange={e => {
+                            const val = e.target.value;
+                            const patch = val ? { ipva_vencimento: `${val}-01` } : { ipva_vencimento: null };
+                            salvarDocumentacao(patch);
+                          }}
+                          className="px-2 py-1 bg-white/5 border border-border rounded-lg text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                        />
+                        {veiculo.documentacao.ipva_vencimento && (
+                          <button
+                            onClick={() => salvarDocumentacao({ ipva_vencimento: null })}
+                            className="text-xs text-red-400 hover:underline ml-1"
+                          >
+                            Limpar
+                          </button>
+                        )}
+                      </div>
+                    ) : veiculo.documentacao.ipva_vencimento ? (() => {
+                      const parts = veiculo.documentacao.ipva_vencimento.split('-');
+                      const mesAno = `${parts[1]}/${parts[0]}`;
+                      const vencido = new Date(veiculo.documentacao.ipva_vencimento + 'T12:00:00') < new Date();
+                      return (
+                        <div className="flex items-center gap-2 px-1 py-1">
+                          <AlertCircle size={14} className={vencido ? 'text-red-400' : 'text-yellow-400'} />
+                          <span className="text-sm text-text-primary">IPVA vence em {mesAno}</span>
+                        </div>
+                      );
+                    })() : null}
+                  </div>
+                  {([
+                    ['transferencia_ok', 'Transferência'],
+                    ['laudo_vistoria_ok', 'Laudo vistoria'],
+                    ['dut_ok', 'DUT'],
+                    ['crlv_ok', 'CRLV'],
+                  ] as [keyof DocumentacaoVeiculo, string][]).map(([key, label]) => {
+                    const ok = veiculo.documentacao![key] as boolean;
+                    return (
+                      <button
+                        key={key}
+                        disabled={!editandoDoc || salvandoDoc}
+                        onClick={() => salvarDocumentacao({ [key]: !ok })}
+                        className={cn(
+                          'flex items-center gap-2 text-left transition-colors rounded-lg',
+                          editandoDoc ? 'cursor-pointer hover:bg-white/5 px-2 py-1 -mx-2' : 'cursor-default',
+                        )}
+                      >
+                        {ok
+                          ? <CheckCircle2 size={15} className="text-green-400 flex-shrink-0" />
+                          : <AlertCircle  size={15} className="text-yellow-400 flex-shrink-0" />}
+                        <span className={cn('text-sm font-medium', ok ? 'text-text-primary' : 'text-text-muted')}>{label}</span>
+                        {editandoDoc && (
+                          <span className={cn('ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full', ok ? 'bg-green-400/10 text-green-400' : 'bg-white/5 text-text-muted')}>
+                            {ok ? 'OK' : 'Pendente'}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-text-muted">Sem documentação cadastrada.</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Tab: Custos ── */}
+        {tab === 'custos' && (
+          <div className="recipe-card">
+            <div className="recipe-card-header">
+              <div className="flex items-center gap-2.5">
+                <span className="w-[3px] h-5 rounded-full bg-red-400 flex-shrink-0" />
+                <span className="text-sm font-bold text-text-primary">Custos do Veículo</span>
+              </div>
+              <span className="text-sm font-mono font-semibold text-red-400">{fmt(veiculo.total_custos)}</span>
+            </div>
+
+            {!bloqueado && (
+              <form onSubmit={adicionarCusto} className="px-5 py-4 border-b border-border bg-white/[0.02] space-y-3">
+                <p className="text-xs font-bold text-text-muted uppercase tracking-widest">Lançar novo custo</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    required
+                    value={custoForm.tipo}
+                    onChange={e => setCustoForm(p => ({ ...p, tipo: e.target.value }))}
+                    placeholder="Tipo (ex: IPVA, Reparo)"
+                    className={INPUT}
+                  />
+                  <input
+                    required
+                    value={custoForm.valor}
+                    onChange={e => setCustoForm(p => ({ ...p, valor: e.target.value }))}
+                    placeholder="Valor (ex: 500)"
+                    className={INPUT}
+                  />
+                </div>
+                <input
+                  value={custoForm.descricao}
+                  onChange={e => setCustoForm(p => ({ ...p, descricao: e.target.value }))}
+                  placeholder="Descrição (opcional)"
+                  className={INPUT}
+                />
+                <button
+                  type="submit"
+                  disabled={salvandoCusto}
+                  className="w-full py-2 bg-primary hover:bg-primary-light text-white text-sm font-bold rounded-xl disabled:opacity-60 transition-colors"
+                >
+                  {salvandoCusto ? 'Salvando...' : 'Lançar custo'}
+                </button>
+              </form>
+            )}
+
+            {veiculo.custos.length === 0 ? (
+              <p className="px-5 py-8 text-sm text-text-muted text-center font-medium">Nenhum custo lançado.</p>
+            ) : (
+              <div className="divide-y divide-border">
+                {veiculo.custos.map(c => (
+                  <div key={c.id} className="px-5 py-3.5 flex items-center gap-3 hover:bg-white/5 transition-colors">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-text-primary">{c.tipo}</p>
+                      {c.descricao && <p className="text-xs text-text-muted truncate">{c.descricao}</p>}
+                      <p className="text-2xs text-text-dim mt-0.5">{new Date(c.data_custo).toLocaleDateString('pt-BR')}</p>
+                    </div>
+                    <p className="text-sm font-bold text-red-400 flex-shrink-0 font-mono">{fmt(c.valor)}</p>
+                    {!bloqueado && (
+                      <button onClick={() => deletarCusto(c.id)} className="text-text-muted hover:text-red-400 transition-colors p-1 rounded-lg hover:bg-red-400/5">
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Reativar (inativo) ── */}
+        {isInativo && (
+          <div className="recipe-card p-5 space-y-3">
+            <p className="text-sm font-bold text-text-primary">Veículo inativo</p>
+            <p className="text-xs text-text-muted leading-relaxed">Este veículo foi inativado e não aparece no estoque ativo. Você pode reativá-lo para torná-lo disponível novamente.</p>
+            <button
+              onClick={reativar}
+              className="w-full py-2.5 bg-green-400/10 hover:bg-green-400/20 text-green-400 border border-green-400/20 font-bold rounded-xl text-sm transition-colors"
+            >
+              Reativar veículo
+            </button>
+          </div>
+        )}
+
+        {/* ── Tab: Vender ── */}
+        {tab === 'vender' && !bloqueado && (
+          <div className="space-y-3">
+            <div className="recipe-card">
+              <div className="recipe-card-header">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-[3px] h-5 rounded-full bg-green-400 flex-shrink-0" />
+                  <span className="text-sm font-bold text-text-primary">Registrar Venda</span>
+                </div>
+              </div>
+              <form onSubmit={registrarVenda} className="p-5 space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
+                    Preço final de venda (R$) <span className="text-primary">*</span>
+                  </label>
+                  <input
+                    required
+                    value={vendaForm.preco_venda_final}
+                    onChange={e => setVendaForm(p => ({ ...p, preco_venda_final: e.target.value }))}
+                    placeholder={String(veiculo.preco_venda)}
+                    className={INPUT}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Data da venda</label>
+                    <input
+                      type="date"
+                      value={vendaForm.data_venda}
+                      onChange={e => setVendaForm(p => ({ ...p, data_venda: e.target.value }))}
+                      className={INPUT}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Nome do comprador</label>
+                    <input
+                      value={vendaForm.nome_comprador}
+                      onChange={e => setVendaForm(p => ({ ...p, nome_comprador: e.target.value }))}
+                      placeholder="Opcional"
+                      className={INPUT}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Forma de pagamento</label>
+                    <select
+                      value={vendaForm.forma_pagamento}
+                      onChange={e => setVendaForm(p => ({ ...p, forma_pagamento: e.target.value }))}
+                      className={INPUT}
+                    >
+                      <option value="">Selecionar (opcional)</option>
+                      <option value="À vista">À vista</option>
+                      <option value="Financiamento">Financiamento</option>
+                      <option value="Consórcio">Consórcio</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Vendedor responsável</label>
+                    {vendedoresCad.length > 0 ? (
+                      <select
+                        value={vendaForm.nome_vendedor}
+                        onChange={e => setVendaForm(p => ({ ...p, nome_vendedor: e.target.value }))}
+                        className={INPUT}
+                      >
+                        <option value="">Selecionar vendedor</option>
+                        {vendedoresCad.map(n => (
+                          <option key={n} value={n}>{n}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        value={vendaForm.nome_vendedor}
+                        onChange={e => setVendaForm(p => ({ ...p, nome_vendedor: e.target.value }))}
+                        placeholder="Nome do vendedor"
+                        className={INPUT}
+                      />
+                    )}
+                  </div>
+                </div>
+                <button
+                  type="submit"
+                  disabled={salvandoVenda}
+                  className="w-full py-3 bg-green-400/10 hover:bg-green-400/20 text-green-400 border border-green-400/20 font-bold rounded-xl text-sm transition-colors disabled:opacity-60"
+                >
+                  {salvandoVenda ? 'Registrando...' : 'Confirmar venda'}
+                </button>
+              </form>
+            </div>
+
+            <button
+              onClick={inativar}
+              className="w-full py-2.5 bg-white/5 border border-border text-text-muted text-sm rounded-xl hover:bg-white/10 hover:text-text-primary transition-colors font-medium"
+            >
+              Inativar veículo
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
 function FinCard({ label, value, green }: { label: string; value: string; green?: number }) {
   return (
-    <div className="bg-white/5 border border-border rounded-xl p-3 text-center">
-      <p className="text-xs text-text-muted">{label}</p>
+    <div className="bg-white/5 border border-border rounded-xl p-4 text-center">
+      <p className="text-2xs font-semibold text-text-dim uppercase tracking-widest mb-1.5">{label}</p>
       <p className={cn(
-        'text-sm font-bold mt-0.5',
+        'text-sm font-bold font-mono',
         green === undefined ? 'text-text-primary' : green >= 0 ? 'text-green-400' : 'text-red-400',
       )}>
         {value}
@@ -744,8 +777,7 @@ function FotoGaleria({
 
   async function handleSetCapa(fotoId: string) {
     const idx = fotos.findIndex(f => f.id === fotoId);
-    if (idx <= 0) return; // já é capa
-    // Reordenar: a foto clicada vira ordem 0, as demais sobem
+    if (idx <= 0) return;
     const novaOrdem = [
       { id: fotoId, ordem: 0 },
       ...fotos.filter(f => f.id !== fotoId).map((f, i) => ({ id: f.id, ordem: i + 1 })),
@@ -763,7 +795,6 @@ function FotoGaleria({
 
   return (
     <div className="space-y-2">
-      {/* Foto principal / placeholder */}
       <div
         className="aspect-video bg-white/5 rounded-2xl overflow-hidden border border-border relative cursor-pointer group"
         onClick={() => fotoCapa && setPreview(0)}
@@ -772,7 +803,7 @@ function FotoGaleria({
           <>
             <img src={fotoCapa} alt="Foto principal" className="w-full h-full object-cover" />
             {fotos.length > 1 && (
-              <div className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-2 py-0.5 rounded-full">
+              <div className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-2 py-0.5 rounded-full font-medium">
                 +{fotos.length - 1} foto{fotos.length > 2 ? 's' : ''}
               </div>
             )}
@@ -781,13 +812,12 @@ function FotoGaleria({
           <div className="w-full h-full flex flex-col items-center justify-center gap-2">
             <Car size={40} className="text-border" />
             {!bloqueado && (
-              <p className="text-xs text-text-muted">Nenhuma foto. Clique em + para adicionar.</p>
+              <p className="text-xs text-text-muted font-medium">Nenhuma foto. Clique em + para adicionar.</p>
             )}
           </div>
         )}
       </div>
 
-      {/* Miniaturas + botão de upload */}
       {(fotos.length > 0 || !bloqueado) && (
         <div className="flex gap-2 overflow-x-auto pb-1">
           {fotos.map((foto, i) => (
@@ -797,7 +827,7 @@ function FotoGaleria({
                 alt={`Foto ${i + 1}`}
                 onClick={() => setPreview(i)}
                 className={cn(
-                  'w-16 h-16 object-cover rounded-lg border cursor-pointer transition-all',
+                  'w-16 h-16 object-cover rounded-xl border cursor-pointer transition-all',
                   i === 0 ? 'border-primary' : 'border-border hover:border-primary/50',
                 )}
               />
@@ -806,9 +836,9 @@ function FotoGaleria({
                   {i > 0 && (
                     <button
                       onClick={() => handleSetCapa(foto.id)}
-                      className="absolute inset-0 rounded-lg bg-black/60 flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity"
+                      className="absolute inset-0 rounded-xl bg-black/60 flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity"
                     >
-                      <span className="text-[10px] font-semibold text-white leading-tight text-center px-1">
+                      <span className="text-[10px] font-bold text-white leading-tight text-center px-1">
                         Definir<br />capa
                       </span>
                     </button>
@@ -822,7 +852,7 @@ function FotoGaleria({
                 </>
               )}
               {i === 0 && (
-                <span className="absolute bottom-0.5 left-0.5 text-[9px] bg-primary text-white px-1 rounded leading-4">
+                <span className="absolute bottom-0.5 left-0.5 text-[9px] bg-primary text-white px-1 rounded font-bold leading-4">
                   capa
                 </span>
               )}
@@ -842,14 +872,14 @@ function FotoGaleria({
               <button
                 onClick={() => inputRef.current?.click()}
                 disabled={uploading}
-                className="w-16 h-16 flex-shrink-0 bg-white/5 border border-dashed border-border rounded-lg flex flex-col items-center justify-center gap-0.5 hover:bg-white/10 hover:border-primary/50 transition-colors disabled:opacity-40"
+                className="w-16 h-16 flex-shrink-0 bg-white/5 border border-dashed border-border rounded-xl flex flex-col items-center justify-center gap-0.5 hover:bg-white/10 hover:border-primary/50 transition-colors disabled:opacity-40"
               >
                 {uploading ? (
                   <span className="text-xs text-text-muted animate-pulse">...</span>
                 ) : (
                   <>
                     <Plus size={16} className="text-text-muted" />
-                    <span className="text-[10px] text-text-muted">Foto</span>
+                    <span className="text-[10px] text-text-muted font-medium">Foto</span>
                   </>
                 )}
               </button>
@@ -858,17 +888,16 @@ function FotoGaleria({
         </div>
       )}
 
-      {/* Lightbox */}
       {preview !== null && fotos[preview] && (
         <div
           className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
           onClick={() => setPreview(null)}
         >
           <button
-            className="absolute top-4 right-4 text-white/70 hover:text-white"
+            className="absolute top-4 right-4 text-white/70 hover:text-white p-2 rounded-xl hover:bg-white/10 transition-colors"
             onClick={() => setPreview(null)}
           >
-            <X size={28} />
+            <X size={24} />
           </button>
           <img
             src={fotos[preview].url}

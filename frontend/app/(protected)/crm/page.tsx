@@ -13,11 +13,11 @@ const COLUNAS: Lead['status_funil'][] = [
 ];
 
 const COR_COLUNA: Record<string, string> = {
-  novo:     'border-blue-400/20',
-  contato:  'border-amber-400/20',
-  visita:   'border-orange-400/20',
-  proposta: 'border-violet-400/20',
-  fechado:  'border-green-400/20',
+  novo:     'border-blue-400/25',
+  contato:  'border-amber-400/25',
+  visita:   'border-orange-400/25',
+  proposta: 'border-violet-400/25',
+  fechado:  'border-green-400/25',
   perdido:  'border-border',
 };
 
@@ -28,6 +28,15 @@ const COR_HEADER: Record<string, string> = {
   proposta: 'text-violet-400',
   fechado:  'text-green-400',
   perdido:  'text-text-muted',
+};
+
+const COR_BAR: Record<string, string> = {
+  novo:     'bg-blue-400',
+  contato:  'bg-amber-400',
+  visita:   'bg-orange-400',
+  proposta: 'bg-violet-400',
+  fechado:  'bg-green-400',
+  perdido:  'bg-text-dim',
 };
 
 const COR_FUNIL: Record<string, string> = {
@@ -111,87 +120,106 @@ export default function CRMPage() {
   }
 
   if (loading) return (
-    <div className="p-4 md:p-6 flex items-center justify-center min-h-[40vh]">
-      <p className="text-sm text-text-muted">Carregando leads...</p>
+    <div className="flex items-center justify-center min-h-[40vh]">
+      <div className="text-center">
+        <div className="w-10 h-10 rounded-xl bg-white/[0.03] border border-border flex items-center justify-center mx-auto mb-3 animate-pulse">
+          <Users size={18} className="text-text-dim" />
+        </div>
+        <p className="text-sm text-text-muted">Carregando leads...</p>
+      </div>
     </div>
   );
 
   if (erro) return (
     <div className="p-6 text-center">
-      <RefreshCw size={32} className="mx-auto text-border mb-3" />
-      <p className="text-sm text-text-muted mb-3">Não foi possível carregar os leads.</p>
-      <button onClick={carregar} className="text-sm text-primary font-medium hover:underline">
+      <div className="w-12 h-12 rounded-2xl bg-white/[0.03] border border-border flex items-center justify-center mx-auto mb-4">
+        <RefreshCw size={20} className="text-text-dim" />
+      </div>
+      <p className="text-sm text-text-muted mb-3 font-medium">Não foi possível carregar os leads.</p>
+      <button onClick={carregar} className="text-sm text-primary font-semibold hover:underline">
         Tentar novamente
       </button>
     </div>
   );
 
   return (
-    <div className="p-4 md:p-6" onClick={() => setMovendoId(null)}>
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <h1 className="text-lg md:text-xl font-bold text-text-primary tracking-tight">CRM</h1>
-          <p className="text-xs text-text-muted mt-0.5 font-medium">{leads.length} lead{leads.length !== 1 ? 's' : ''} ativos</p>
+    <div onClick={() => setMovendoId(null)}>
+
+      {/* ── Page header ── */}
+      <div className="page-hero">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="breadcrumb">
+              <Users size={10} />
+              Painel / CRM
+            </p>
+            <h1 className="text-xl md:text-2xl font-bold text-text-primary tracking-tight">Funil de Vendas</h1>
+            <p className="text-sm text-text-muted mt-1">
+              {leads.length} lead{leads.length !== 1 ? 's' : ''} ativos no pipeline
+            </p>
+          </div>
+          <button
+            onClick={carregar}
+            className="p-2 rounded-lg border border-border text-text-muted hover:text-text-primary hover:border-border-bright transition-all"
+            title="Atualizar leads"
+          >
+            <RefreshCw size={14} />
+          </button>
         </div>
-        <button
-          onClick={carregar}
-          className="p-2 rounded-lg border border-border text-text-muted hover:text-text-primary hover:border-border-bright transition-all"
-          title="Atualizar"
-        >
-          <RefreshCw size={14} />
-        </button>
       </div>
 
-      {leads.length === 0 ? (
-        <div className="text-center py-16">
-          <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-border flex items-center justify-center mx-auto mb-4">
-            <Users size={28} className="text-text-dim" strokeWidth={1.5} />
+      <div className="p-5 md:p-8">
+        {leads.length === 0 ? (
+          <div className="text-center py-16">
+            <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-border flex items-center justify-center mx-auto mb-4">
+              <Users size={28} className="text-text-dim" strokeWidth={1.5} />
+            </div>
+            <p className="text-sm font-semibold text-text-muted">Nenhum lead ainda.</p>
+            <p className="text-xs text-text-dim mt-1">Os leads chegam via WhatsApp ou Instagram.</p>
           </div>
-          <p className="text-sm font-medium text-text-muted">Nenhum lead ainda.</p>
-          <p className="text-xs text-text-dim mt-1">Os leads chegam via WhatsApp ou Instagram.</p>
-        </div>
-      ) : (
-        <>
-          {/* Desktop: kanban horizontal */}
-          <div className="hidden md:flex gap-3 overflow-x-auto pb-4 scrollbar-hide -mx-1 px-1">
-            {COLUNAS.map(col => (
-              <Coluna
-                key={col}
-                id={col}
-                leads={leads.filter(l => l.status_funil === col)}
-                movendoId={movendoId}
-                onAssumir={assumir}
-                assumindo={assumindo}
-                onAbrir={abrirDrawer}
-                onMover={moverLead}
-                onToggleMover={(id) => setMovendoId(prev => prev === id ? null : id)}
-              />
-            ))}
-          </div>
-
-          {/* Mobile: colunas empilhadas */}
-          <div className="md:hidden space-y-4">
-            {COLUNAS.map(col => {
-              const colLeads = leads.filter(l => l.status_funil === col);
-              if (colLeads.length === 0) return null;
-              return (
+        ) : (
+          <>
+            {/* Desktop: kanban horizontal */}
+            <div className="hidden md:flex gap-3 overflow-x-auto pb-4 scrollbar-hide -mx-1 px-1">
+              {COLUNAS.map(col => (
                 <Coluna
                   key={col}
                   id={col}
-                  leads={colLeads}
+                  leads={leads.filter(l => l.status_funil === col)}
                   movendoId={movendoId}
                   onAssumir={assumir}
                   assumindo={assumindo}
                   onAbrir={abrirDrawer}
                   onMover={moverLead}
                   onToggleMover={(id) => setMovendoId(prev => prev === id ? null : id)}
-                  mobile
                 />
-              );
-            })}
-          </div>
-        </>
-      )}
+              ))}
+            </div>
+
+            {/* Mobile: colunas empilhadas */}
+            <div className="md:hidden space-y-4">
+              {COLUNAS.map(col => {
+                const colLeads = leads.filter(l => l.status_funil === col);
+                if (colLeads.length === 0) return null;
+                return (
+                  <Coluna
+                    key={col}
+                    id={col}
+                    leads={colLeads}
+                    movendoId={movendoId}
+                    onAssumir={assumir}
+                    assumindo={assumindo}
+                    onAbrir={abrirDrawer}
+                    onMover={moverLead}
+                    onToggleMover={(id) => setMovendoId(prev => prev === id ? null : id)}
+                    mobile
+                  />
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
 
       {/* ── Drawer de histórico ── */}
       {(drawerLead || loadingDrawer) && (
@@ -212,7 +240,7 @@ export default function CRMPage() {
 
             {loadingDrawer ? (
               <div className="flex-1 flex items-center justify-center">
-                <p className="text-sm text-text-muted">Carregando...</p>
+                <p className="text-sm text-text-muted">Carregando histórico...</p>
               </div>
             ) : (
               <div className="flex-1 overflow-y-auto p-4 space-y-2">
@@ -261,9 +289,12 @@ function Coluna({ id, leads, movendoId, onAssumir, assumindo, onAbrir, onMover, 
       )}
     >
       <div className="px-3 py-2.5 border-b border-border flex items-center justify-between">
-        <span className={cn('text-xs font-bold uppercase tracking-wide', COR_HEADER[id])}>
-          {FUNIL_LABEL[id]}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className={cn('w-2 h-2 rounded-full', COR_BAR[id])} />
+          <span className={cn('text-xs font-bold uppercase tracking-wide', COR_HEADER[id])}>
+            {FUNIL_LABEL[id]}
+          </span>
+        </div>
         <span className="text-xs font-semibold text-text-muted bg-white/5 px-1.5 py-0.5 rounded-full">
           {leads.length}
         </span>
@@ -300,7 +331,6 @@ function LeadCardContent({ lead, onAssumir, assumindo, onAbrir, onMover, onToggl
       onClick={() => onAbrir(lead.id)}
       className="bg-card-hover border border-border rounded-xl p-3 select-none cursor-pointer hover:border-primary/40 transition-colors"
     >
-      {/* Header: nome + botão mover */}
       <div className="flex items-start justify-between gap-1">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-text-primary leading-tight truncate">
@@ -312,21 +342,20 @@ function LeadCardContent({ lead, onAssumir, assumindo, onAbrir, onMover, onToggl
           <p className="text-xs text-text-muted mt-0.5 capitalize">{lead.canal}</p>
         </div>
         <button
-            onPointerDown={e => e.stopPropagation()}
-            onClick={e => { e.stopPropagation(); onToggleMover(lead.id); }}
-            title="Mover para coluna"
-            className={cn(
-              'flex-shrink-0 p-1 rounded-lg transition-colors',
-              movendoAberto
-                ? 'bg-primary/15 text-primary'
-                : 'text-text-muted hover:text-text-primary hover:bg-white/5',
-            )}
-          >
-            <ArrowRightLeft size={12} />
-          </button>
+          onPointerDown={e => e.stopPropagation()}
+          onClick={e => { e.stopPropagation(); onToggleMover(lead.id); }}
+          title="Mover para coluna"
+          className={cn(
+            'flex-shrink-0 p-1 rounded-lg transition-colors',
+            movendoAberto
+              ? 'bg-primary/15 text-primary'
+              : 'text-text-muted hover:text-text-primary hover:bg-white/5',
+          )}
+        >
+          <ArrowRightLeft size={12} />
+        </button>
       </div>
 
-      {/* Seletor de colunas */}
       {movendoAberto && (
         <div
           onPointerDown={e => e.stopPropagation()}
@@ -370,7 +399,7 @@ function LeadCardContent({ lead, onAssumir, assumindo, onAbrir, onMover, onToggl
           onPointerDown={e => e.stopPropagation()}
           onClick={e => { e.stopPropagation(); onAssumir(lead.id); }}
           disabled={assumindo === lead.id}
-          className="mt-2 w-full flex items-center justify-center gap-1 py-1.5 text-xs text-primary border border-primary/20 rounded-lg hover:bg-primary/5 transition-colors disabled:opacity-50 font-medium"
+          className="mt-2 w-full flex items-center justify-center gap-1.5 py-1.5 text-xs text-primary border border-primary/20 rounded-lg hover:bg-primary/5 transition-colors disabled:opacity-50 font-semibold"
         >
           <Handshake size={12} />
           {assumindo === lead.id ? 'Assumindo...' : 'Assumir atendimento'}

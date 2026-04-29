@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { api, type Veiculo } from '@/lib/api';
 import { fmt, fmtKm, STATUS_LABEL, cn } from '@/lib/utils';
-import { Plus, Search, Car, RefreshCw, TrendingUp, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, Car, RefreshCw, TrendingUp, ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
 
 function mesLabel(mes: string) {
   const [ano, m] = mes.split('-').map(Number);
@@ -23,43 +23,43 @@ function mesSeguinte(mes: string) {
 
 const FILTROS = [
   { value: 'disponivel', label: 'Disponíveis' },
-  { value: 'reservado',  label: 'Reservados' },
-  { value: 'vendido',    label: 'Vendidos' },
-  { value: 'inativo',   label: 'Inativos' },
+  { value: 'reservado',  label: 'Reservados'  },
+  { value: 'vendido',    label: 'Vendidos'    },
+  { value: 'inativo',    label: 'Inativos'    },
 ];
 
-const STATUS_DOT: Record<string, string> = {
+const STATUS_COLOR: Record<string, string> = {
   disponivel: 'bg-green-400',
   reservado:  'bg-yellow-400',
   vendido:    'bg-blue-400',
-  inativo:    'bg-text-muted',
+  inativo:    'bg-text-dim',
 };
 
-function Skeleton() {
-  return (
-    <div className="animate-pulse bg-card border border-border rounded-xl overflow-hidden">
-      <div className="aspect-video bg-white/5" />
-      <div className="p-3 space-y-2">
-        <div className="h-4 bg-white/5 rounded w-2/3" />
-        <div className="h-3 bg-white/5 rounded w-1/2" />
-      </div>
-    </div>
-  );
-}
+const STATUS_BADGE: Record<string, string> = {
+  disponivel: 'bg-green-400/10 text-green-400',
+  reservado:  'bg-yellow-400/10 text-yellow-400',
+  vendido:    'bg-blue-400/10 text-blue-400',
+  inativo:    'bg-white/5 text-text-muted',
+};
+
+const STATUS_BAR: Record<string, string> = {
+  disponivel: 'bg-green-400',
+  reservado:  'bg-yellow-400',
+  vendido:    'bg-blue-400',
+  inativo:    'bg-text-dim',
+};
 
 export default function EstoquePage() {
   const [veiculos, setVeiculos] = useState<Veiculo[]>([]);
+  const [todos, setTodos]       = useState<Veiculo[]>([]);
   const [loading, setLoading]   = useState(true);
   const [erro, setErro]         = useState(false);
   const [busca, setBusca]       = useState('');
   const [status, setStatus]     = useState('disponivel');
   const [mes, setMes]           = useState<string>(() => new Date().toISOString().slice(0, 7));
 
-  const [todos, setTodos] = useState<Veiculo[]>([]);
-
   const carregar = useCallback(async () => {
-    setLoading(true);
-    setErro(false);
+    setLoading(true); setErro(false);
     try {
       const [filtrados, todosList] = await Promise.all([
         api.veiculos.listar({ status }),
@@ -67,11 +67,7 @@ export default function EstoquePage() {
       ]);
       setVeiculos(filtrados);
       setTodos(todosList);
-    } catch {
-      setErro(true);
-    } finally {
-      setLoading(false);
-    }
+    } catch { setErro(true); } finally { setLoading(false); }
   }, [status]);
 
   useEffect(() => { carregar(); }, [carregar]);
@@ -88,172 +84,189 @@ export default function EstoquePage() {
       : veiculos;
 
   return (
-    <div className="p-4 md:p-6 max-w-5xl mx-auto animate-fade-in">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-5">
-        <h1 className="text-lg md:text-xl font-bold text-text-primary tracking-tight">Estoque</h1>
-        <Link href="/estoque/novo" className="btn-primary">
-          <Plus size={16} /> Novo veículo
-        </Link>
-      </div>
+    <div className="animate-fade-in h-full flex flex-col">
 
-      {/* Busca */}
-      <div className="relative mb-3">
-        <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
-        <input
-          value={busca}
-          onChange={e => setBusca(e.target.value)}
-          placeholder="Buscar placa, marca ou modelo..."
-          className="input pl-10"
-        />
-      </div>
-
-      {/* Filtros */}
-      <div className={cn('flex gap-2 overflow-x-auto pb-1 scrollbar-hide', status === 'vendido' ? 'mb-3' : 'mb-5')}>
-        {FILTROS.map(f => (
-          <button
-            key={f.value}
-            onClick={() => setStatus(f.value)}
-            className={cn(
-              'flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold transition-all border tracking-wide',
-              status === f.value
-                ? 'bg-primary text-white border-primary shadow-glow-red'
-                : 'bg-transparent text-text-muted border-border hover:border-border-bright hover:text-text-primary',
-            )}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Seletor de mês — apenas para vendidos */}
-      {status === 'vendido' && (
-        <div className="flex items-center justify-between mb-5 bg-card border border-border rounded-xl px-4 py-2.5">
-          <button
-            onClick={() => setMes(mesAnterior(mes))}
-            className="p-1 text-text-muted hover:text-text-primary transition-colors"
-          >
-            <ChevronLeft size={18} />
-          </button>
-          <span className="text-sm font-medium text-text-primary capitalize">
-            {mesLabel(mes)}
-          </span>
-          <button
-            onClick={() => setMes(mesSeguinte(mes))}
-            disabled={mes >= new Date().toISOString().slice(0, 7)}
-            className="p-1 text-text-muted hover:text-text-primary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            <ChevronRight size={18} />
-          </button>
-        </div>
-      )}
-
-      {/* Erro */}
-      {erro && (
-        <div className="text-center py-12">
-          <RefreshCw size={32} className="mx-auto text-border mb-3" />
-          <p className="text-sm text-text-muted mb-3">Não foi possível carregar os veículos.</p>
-          <button onClick={carregar} className="text-sm text-primary font-medium hover:underline">
-            Tentar novamente
-          </button>
-        </div>
-      )}
-
-      {/* Skeleton */}
-      {loading && !erro && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {[...Array(6)].map((_, i) => <Skeleton key={i} />)}
-        </div>
-      )}
-
-      {/* Vazio */}
-      {!loading && !erro && filtrados.length === 0 && (
-        <div className="text-center py-16">
-          <Car size={48} className="mx-auto text-border mb-3" />
-          <p className="text-sm text-text-muted mb-4">
-            {busca ? 'Nenhum resultado para essa busca.' : 'Nenhum veículo nessa categoria.'}
-          </p>
-          {!busca && status === 'disponivel' && (
-            <Link href="/estoque/novo" className="inline-flex items-center gap-1.5 text-sm text-primary font-medium hover:underline">
-              <Plus size={15} /> Cadastrar primeiro veículo
-            </Link>
-          )}
-        </div>
-      )}
-
-      {/* Lista */}
-      {!loading && !erro && filtrados.length > 0 && (
-        <>
-          <p className="text-xs text-text-muted mb-3">
-            {filtrados.length} veículo{filtrados.length !== 1 ? 's' : ''}
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {filtrados.map(v => <VeiculoCard key={v.id} v={v} />)}
+      {/* ── Page header ── */}
+      <div className="page-hero">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <p className="breadcrumb">
+              <Car size={10} />
+              Painel / Estoque
+            </p>
+            <h1 className="text-xl font-bold text-text-primary tracking-tight">Gestão de Estoque</h1>
+            <p className="text-sm text-text-muted mt-1">Cadastre, consulte e gerencie os veículos da frota.</p>
           </div>
-        </>
-      )}
-    </div>
-  );
-}
+          <Link href="/estoque/novo" className="btn-primary flex-shrink-0">
+            <Plus size={15} /> Novo veículo
+          </Link>
+        </div>
+      </div>
 
-function VeiculoCard({ v }: { v: Veiculo }) {
-  return (
-    <Link
-      href={`/estoque/${v.id}`}
-      className="bg-card border border-border rounded-xl overflow-hidden hover:bg-card-hover hover:border-border-bright transition-all block group shadow-card"
-    >
-      <div className="aspect-video bg-white/5 relative overflow-hidden">
-        {v.foto_capa ? (
-          <img
-            src={v.foto_capa}
-            alt={`${v.marca} ${v.modelo}`}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <Car size={40} className="text-border" />
+      {/* ── Toolbar ── */}
+      <div className="border-b border-border px-5 md:px-8 py-3 flex items-center gap-3 flex-wrap bg-sidebar/30">
+
+        {/* Filtros de status */}
+        <div className="flex gap-1.5 overflow-x-auto scrollbar-hide">
+          {FILTROS.map(f => (
+            <button
+              key={f.value}
+              onClick={() => setStatus(f.value)}
+              className={cn(
+                'flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border',
+                status === f.value
+                  ? 'bg-primary/10 text-primary border-primary/30'
+                  : 'text-text-muted border-transparent hover:border-border hover:text-text-primary',
+              )}
+            >
+              <span className={cn('w-1.5 h-1.5 rounded-full', STATUS_BAR[f.value])} />
+              {f.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Seletor mês vendidos */}
+        {status === 'vendido' && (
+          <div className="flex items-center gap-1 bg-card border border-border rounded-lg px-2 py-1">
+            <button onClick={() => setMes(mesAnterior(mes))} className="p-0.5 text-text-muted hover:text-text-primary transition-colors">
+              <ChevronLeft size={14} />
+            </button>
+            <span className="text-xs font-medium text-text-primary px-1 capitalize whitespace-nowrap">{mesLabel(mes)}</span>
+            <button onClick={() => setMes(mesSeguinte(mes))} disabled={mes >= new Date().toISOString().slice(0, 7)} className="p-0.5 text-text-muted hover:text-text-primary transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+              <ChevronRight size={14} />
+            </button>
           </div>
         )}
-        <div className="absolute top-2 right-2 flex items-center gap-1.5 bg-background/80 backdrop-blur-sm px-2 py-0.5 rounded-full border border-border">
-          <span className={cn('w-1.5 h-1.5 rounded-full', STATUS_DOT[v.status] ?? 'bg-text-muted')} />
-          <span className="text-xs font-medium text-text-primary">{STATUS_LABEL[v.status]}</span>
+
+        <div className="flex-1" />
+
+        {/* Busca */}
+        <div className="relative w-full sm:w-56">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
+          <input
+            value={busca}
+            onChange={e => setBusca(e.target.value)}
+            placeholder="Buscar por placa, marca..."
+            className="input pl-8 !py-1.5 !text-xs"
+          />
         </div>
       </div>
 
-      <div className="p-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="font-semibold text-text-primary text-sm truncate group-hover:text-primary transition-colors">
-              {v.marca} {v.modelo}
+      {/* ── Tabela ── */}
+      <div className="flex-1 overflow-auto">
+        {erro ? (
+          <div className="flex flex-col items-center justify-center py-20">
+            <div className="w-12 h-12 rounded-2xl bg-white/[0.03] border border-border flex items-center justify-center mb-4">
+              <RefreshCw size={20} className="text-text-dim" />
+            </div>
+            <p className="text-sm text-text-muted mb-3 font-medium">Não foi possível carregar.</p>
+            <button onClick={carregar} className="text-sm text-primary font-semibold hover:underline">Tentar novamente</button>
+          </div>
+        ) : loading ? (
+          <table className="w-full">
+            <tbody>
+              {Array.from({ length: 8 }).map((_, i) => (
+                <tr key={i} className="border-b border-border animate-pulse">
+                  <td className="px-5 py-4"><div className="h-4 bg-white/[0.04] rounded w-32" /></td>
+                  <td className="px-4 py-4 hidden md:table-cell"><div className="h-3 bg-white/[0.04] rounded w-20" /></td>
+                  <td className="px-4 py-4"><div className="h-4 bg-white/[0.04] rounded w-24" /></td>
+                  <td className="px-4 py-4 hidden sm:table-cell"><div className="h-4 bg-white/[0.04] rounded w-20" /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : filtrados.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20">
+            <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-border flex items-center justify-center mb-4">
+              <Car size={26} className="text-text-dim" strokeWidth={1.5} />
+            </div>
+            <p className="text-sm font-semibold text-text-muted">
+              {busca ? 'Nenhum resultado para essa busca.' : 'Nenhum veículo nessa categoria.'}
             </p>
-            <p className="text-xs text-text-muted mt-0.5">{v.ano} · {fmtKm(v.km)} · {v.cor}</p>
+            {!busca && status === 'disponivel' && (
+              <Link href="/estoque/novo" className="inline-flex items-center gap-1.5 text-sm text-primary font-medium hover:underline mt-3">
+                <Plus size={14} /> Cadastrar primeiro veículo
+              </Link>
+            )}
           </div>
-          <span className="text-xs font-mono text-text-muted flex-shrink-0 mt-0.5 bg-white/5 px-1.5 py-0.5 rounded">
-            {v.placa}
-          </span>
-        </div>
-
-        <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-border">
-          <div>
-            <p className="text-xs text-text-muted">{v.status === 'vendido' ? 'Vendido por' : 'Preço de venda'}</p>
-            <p className="text-sm font-bold text-text-primary">
-              {fmt(v.status === 'vendido' && v.preco_venda_final ? v.preco_venda_final : v.preco_venda)}
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="text-xs text-text-muted">{v.status === 'vendido' ? 'Lucro real' : 'Lucro est.'}</p>
-            {(() => {
-              const lucro = v.status === 'vendido' ? (v.lucro_real ?? v.lucro_estimado) : v.lucro_estimado;
-              return (
-                <p className={cn('text-sm font-semibold flex items-center gap-0.5 justify-end', lucro >= 0 ? 'text-green-400' : 'text-red-400')}>
-                  <TrendingUp size={12} />
-                  {fmt(lucro)}
-                </p>
-              );
-            })()}
-          </div>
-        </div>
+        ) : (
+          <>
+            <table className="w-full min-w-[600px]">
+              <thead className="sticky top-0 bg-background/95 backdrop-blur-sm z-10">
+                <tr className="border-b border-border">
+                  <th className="tbl-th">Veículo</th>
+                  <th className="tbl-th hidden md:table-cell">Km / Cor</th>
+                  <th className="tbl-th hidden lg:table-cell">Status</th>
+                  <th className="tbl-th-right">Preço</th>
+                  <th className="tbl-th-right hidden sm:table-cell">Lucro</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filtrados.map(v => {
+                  const lucro = v.status === 'vendido' ? (v.lucro_real ?? v.lucro_estimado) : v.lucro_estimado;
+                  const preco = v.status === 'vendido' && v.preco_venda_final ? v.preco_venda_final : v.preco_venda;
+                  return (
+                    <Link key={v.id} href={`/estoque/${v.id}`} legacyBehavior>
+                      <tr className="hover:bg-white/[0.02] cursor-pointer group transition-colors">
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-3">
+                            <div className="relative w-10 h-10 rounded-xl overflow-hidden bg-white/[0.04] border border-border flex-shrink-0">
+                              {v.foto_capa ? (
+                                <img src={v.foto_capa} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <Car className="w-4 h-4 text-text-dim absolute inset-0 m-auto" strokeWidth={1.5} />
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-text-primary group-hover:text-primary transition-colors truncate">
+                                {v.marca} {v.modelo} <span className="font-normal text-text-muted">{v.ano}</span>
+                              </p>
+                              <p className="text-xs font-mono text-text-muted mt-0.5">{v.placa}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3.5 hidden md:table-cell">
+                          <p className="text-xs font-mono text-text-muted">{fmtKm(v.km)}</p>
+                          <p className="text-xs text-text-dim capitalize mt-0.5">{v.cor}</p>
+                        </td>
+                        <td className="px-4 py-3.5 hidden lg:table-cell">
+                          <span className={cn('badge', STATUS_BADGE[v.status])}>
+                            <span className={cn('w-1.5 h-1.5 rounded-full', STATUS_COLOR[v.status])} />
+                            {STATUS_LABEL[v.status]}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5 text-right">
+                          <p className="text-sm font-semibold font-mono text-text-primary">{fmt(preco)}</p>
+                          {v.status === 'vendido' && v.data_venda && (
+                            <p className="text-2xs text-text-dim mt-0.5">{v.data_venda.split('-').reverse().join('/')}</p>
+                          )}
+                        </td>
+                        <td className="px-5 py-3.5 text-right hidden sm:table-cell">
+                          <span className={cn(
+                            'text-xs font-semibold font-mono flex items-center gap-0.5 justify-end',
+                            lucro >= 0 ? 'text-green-400' : 'text-red-400',
+                          )}>
+                            <TrendingUp className="w-3 h-3" />
+                            {fmt(lucro)}
+                          </span>
+                        </td>
+                      </tr>
+                    </Link>
+                  );
+                })}
+              </tbody>
+            </table>
+            <div className="px-5 py-3 border-t border-border flex items-center justify-between">
+              <p className="text-xs text-text-muted font-medium">{filtrados.length} veículo{filtrados.length !== 1 ? 's' : ''}</p>
+              {busca && (
+                <button onClick={() => setBusca('')} className="text-xs text-text-muted hover:text-primary transition-colors flex items-center gap-1 font-medium">
+                  Limpar busca <ArrowRight size={11} />
+                </button>
+              )}
+            </div>
+          </>
+        )}
       </div>
-    </Link>
+    </div>
   );
 }

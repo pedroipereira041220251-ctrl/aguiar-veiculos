@@ -54,13 +54,53 @@
     @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-2xs font-semibold uppercase tracking-wider;
   }
 
-  /* Stat number style */
   .stat-number {
     @apply font-mono text-3xl font-semibold text-text-primary tabular-nums;
   }
 
   .stat-label {
     @apply text-2xs font-medium uppercase tracking-widest text-text-muted;
+  }
+
+  /* Cookbook-inspired page header */
+  .page-hero {
+    @apply border-b border-border bg-sidebar/60 px-5 md:px-8 py-5 md:py-6;
+  }
+
+  /* Breadcrumb trail */
+  .breadcrumb {
+    @apply text-2xs font-semibold text-text-dim uppercase tracking-[0.15em] mb-1.5 flex items-center gap-1.5;
+  }
+
+  /* Section headings like cookbook chapters */
+  .chapter-heading {
+    @apply flex items-center gap-2.5 mb-4;
+  }
+
+  .chapter-bar {
+    @apply w-[3px] h-5 rounded-full flex-shrink-0;
+  }
+
+  .chapter-title {
+    @apply text-xs font-bold text-text-primary uppercase tracking-[0.12em];
+  }
+
+  /* Recipe card */
+  .recipe-card {
+    @apply bg-card border border-border rounded-xl overflow-hidden transition-all hover:border-border-bright;
+  }
+
+  .recipe-card-header {
+    @apply flex items-center justify-between px-5 py-3.5 border-b border-border;
+  }
+
+  /* Section table header */
+  .tbl-th {
+    @apply text-left px-4 py-3 text-2xs font-semibold text-text-muted uppercase tracking-widest;
+  }
+
+  .tbl-th-right {
+    @apply text-right px-4 py-3 text-2xs font-semibold text-text-muted uppercase tracking-widest;
   }
 }
 

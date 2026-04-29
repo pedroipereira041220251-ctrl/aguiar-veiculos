@@ -180,19 +180,19 @@ export default function FinanceiroPage() {
                       <td className="px-2 md:px-4 py-2.5 md:py-3.5">
                         <span className="text-sm font-mono text-text-dim font-bold">{String(i + 1).padStart(2, '0')}</span>
                       </td>
-                      <td className="px-2 md:px-4 py-2.5 md:py-3.5 min-w-0">
-                        <Link href={`/estoque/${v.id}`} className="hover:text-primary transition-colors block min-w-0">
+                      <td className="px-2 md:px-4 py-2.5 md:py-3.5 w-full max-w-0">
+                        <Link href={`/estoque/${v.id}`} className="hover:text-primary transition-colors block">
                           <p className="text-sm font-semibold text-text-primary truncate">{v.marca} {v.modelo} {v.ano}</p>
                           <p className="text-xs text-text-muted font-mono truncate">{v.placa} · {v.data_venda?.split('-').reverse().join('/')}</p>
                         </Link>
                       </td>
-                      <td className="px-2 md:px-4 py-2.5 md:py-3.5 text-right hidden sm:table-cell">
+                      <td className="px-2 md:px-4 py-2.5 md:py-3.5 text-right hidden sm:table-cell whitespace-nowrap">
                         <p className="text-sm font-semibold font-mono text-text-primary">{fmt(v.preco_venda_final)}</p>
                       </td>
-                      <td className="px-2 md:px-4 py-2.5 md:py-3.5 text-right hidden md:table-cell">
+                      <td className="px-2 md:px-4 py-2.5 md:py-3.5 text-right hidden md:table-cell whitespace-nowrap">
                         <p className="text-xs font-mono text-red-400">{fmt(v.total_custos + v.preco_compra)}</p>
                       </td>
-                      <td className="px-2 md:px-4 py-2.5 md:py-3.5 text-right">
+                      <td className="px-2 md:px-4 py-2.5 md:py-3.5 text-right whitespace-nowrap">
                         <p className={cn('text-xs md:text-sm font-bold font-mono', v.lucro_real >= 0 ? 'text-green-400' : 'text-red-400')}>
                           <span className="md:hidden">{fmtShort(v.lucro_real)}</span>
                           <span className="hidden md:inline">{fmt(v.lucro_real)}</span>
@@ -214,22 +214,22 @@ export default function FinanceiroPage() {
                 {ranking.length > 1 && (
                   <tfoot>
                     <tr className="border-t-2 border-border bg-white/[0.02]">
-                      <td className="px-2 md:px-4 py-2.5 md:py-3 text-2xs font-bold text-text-muted uppercase tracking-widest" colSpan={2}>Total</td>
-                      <td className="px-2 md:px-4 py-2.5 md:py-3 text-right hidden sm:table-cell">
+                      <td className="px-2 md:px-4 py-2.5 md:py-3 text-2xs font-bold text-text-muted uppercase tracking-widest w-full max-w-0" colSpan={2}>Total</td>
+                      <td className="px-2 md:px-4 py-2.5 md:py-3 text-right hidden sm:table-cell whitespace-nowrap">
                         <p className="text-sm font-bold font-mono text-text-primary">{fmt(resumo?.receita)}</p>
                       </td>
-                      <td className="px-2 md:px-4 py-2.5 md:py-3 text-right hidden md:table-cell">
+                      <td className="px-2 md:px-4 py-2.5 md:py-3 text-right hidden md:table-cell whitespace-nowrap">
                         <p className="text-xs font-mono font-bold text-red-400">
                           {fmt(ranking.reduce((s, v) => s + (v.total_custos ?? 0) + (v.preco_compra ?? 0), 0))}
                         </p>
                       </td>
-                      <td className="px-2 md:px-4 py-2.5 md:py-3 text-right">
+                      <td className="px-2 md:px-4 py-2.5 md:py-3 text-right whitespace-nowrap">
                         <p className={cn('text-xs md:text-sm font-bold font-mono', (resumo?.lucro_real ?? 0) >= 0 ? 'text-green-400' : 'text-red-400')}>
                           <span className="md:hidden">{fmtShort(resumo?.lucro_real)}</span>
                           <span className="hidden md:inline">{fmt(resumo?.lucro_real)}</span>
                         </p>
                       </td>
-                      <td className="px-2 md:px-4 py-2.5 md:py-3 text-right hidden sm:table-cell">
+                      <td className="px-2 md:px-4 py-2.5 md:py-3 text-right hidden sm:table-cell whitespace-nowrap">
                         <span className="text-xs font-semibold text-text-muted">{resumo?.margem_pct?.toFixed(1)}%</span>
                       </td>
                     </tr>

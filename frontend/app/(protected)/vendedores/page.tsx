@@ -294,11 +294,15 @@ export default function VendedoresPage() {
                   </tbody>
                   <tfoot>
                     <tr className="border-t-2 border-border bg-white/[0.02]">
-                      <td colSpan={3} className="px-2 md:px-4 py-2.5 md:py-3 text-2xs font-bold text-text-muted uppercase tracking-widest hidden sm:table-cell">Total do período</td>
-                      <td colSpan={3} className="px-2 py-2.5 text-2xs font-bold text-text-muted uppercase tracking-widest sm:hidden">Total</td>
+                      {/* mobile: cobre # + Vendedor (2 colunas visíveis) */}
+                      <td colSpan={2} className="px-2 py-2.5 text-2xs font-bold text-text-muted uppercase tracking-widest sm:hidden">Total</td>
+                      {/* desktop: cobre # + Vendedor + Vendas (3 colunas visíveis) */}
+                      <td colSpan={3} className="px-4 py-3 text-2xs font-bold text-text-muted uppercase tracking-widest hidden sm:table-cell">Total do período</td>
+                      {/* Receita — sempre visível */}
                       <td className="px-2 md:px-4 py-2.5 md:py-3 text-right">
                         <p className="text-xs md:text-sm font-bold font-mono text-green-400">{fmt(totalGeral)}</p>
                       </td>
+                      {/* Comissão — só desktop */}
                       <td className="px-4 py-3 text-right hidden sm:table-cell">
                         <p className="text-sm font-bold font-mono text-primary">{fmt(comissaoGeral)}</p>
                       </td>

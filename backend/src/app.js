@@ -24,8 +24,18 @@ app.set('trust proxy', 1);
 
 // ── Segurança ──────────────────────────────────────────────
 app.use(helmet());
+const allowedOrigins = [
+  'http://localhost:3000',
+  ...(process.env.FRONTEND_URL || '').split(',').map(o => o.trim()).filter(Boolean),
+];
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: (origin, cb) => {
+    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+      cb(null, true);
+    } else {
+      cb(new Error('CORS: origem não permitida'));
+    }
+  },
   credentials: true,
 }));
 

@@ -163,79 +163,79 @@ export default function FinanceiroPage() {
                 <p className="text-sm text-text-muted font-medium">Nenhuma venda neste período.</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[520px]">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="tbl-th w-10">#</th>
-                      <th className="tbl-th">Veículo</th>
-                      <th className="tbl-th-right hidden sm:table-cell">Venda</th>
-                      <th className="tbl-th-right hidden md:table-cell">Custos</th>
-                      <th className="tbl-th-right">Lucro</th>
-                      <th className="tbl-th-right hidden sm:table-cell">Margem</th>
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="tbl-th w-8">#</th>
+                    <th className="tbl-th">Veículo</th>
+                    <th className="tbl-th-right hidden sm:table-cell">Venda</th>
+                    <th className="tbl-th-right hidden md:table-cell">Custos</th>
+                    <th className="tbl-th-right">Lucro</th>
+                    <th className="tbl-th-right hidden sm:table-cell">Margem</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {ranking.map((v, i) => (
+                    <tr key={v.id} className="hover:bg-white/[0.02] transition-colors">
+                      <td className="px-2 md:px-4 py-2.5 md:py-3.5">
+                        <span className="text-sm font-mono text-text-dim font-bold">{String(i + 1).padStart(2, '0')}</span>
+                      </td>
+                      <td className="px-2 md:px-4 py-2.5 md:py-3.5 min-w-0">
+                        <Link href={`/estoque/${v.id}`} className="hover:text-primary transition-colors block min-w-0">
+                          <p className="text-sm font-semibold text-text-primary truncate">{v.marca} {v.modelo} {v.ano}</p>
+                          <p className="text-xs text-text-muted font-mono truncate">{v.placa} · {v.data_venda?.split('-').reverse().join('/')}</p>
+                        </Link>
+                      </td>
+                      <td className="px-2 md:px-4 py-2.5 md:py-3.5 text-right hidden sm:table-cell">
+                        <p className="text-sm font-semibold font-mono text-text-primary">{fmt(v.preco_venda_final)}</p>
+                      </td>
+                      <td className="px-2 md:px-4 py-2.5 md:py-3.5 text-right hidden md:table-cell">
+                        <p className="text-xs font-mono text-red-400">{fmt(v.total_custos + v.preco_compra)}</p>
+                      </td>
+                      <td className="px-2 md:px-4 py-2.5 md:py-3.5 text-right">
+                        <p className={cn('text-xs md:text-sm font-bold font-mono', v.lucro_real >= 0 ? 'text-green-400' : 'text-red-400')}>
+                          <span className="md:hidden">{fmtShort(v.lucro_real)}</span>
+                          <span className="hidden md:inline">{fmt(v.lucro_real)}</span>
+                        </p>
+                      </td>
+                      <td className="px-2 md:px-4 py-2.5 md:py-3.5 text-right hidden sm:table-cell">
+                        <span className={cn(
+                          'badge',
+                          v.margem_pct >= 10 ? 'bg-green-400/10 text-green-400'
+                            : v.margem_pct >= 0 ? 'bg-yellow-400/10 text-yellow-400'
+                            : 'bg-red-400/10 text-red-400',
+                        )}>
+                          {v.margem_pct?.toFixed(1)}%
+                        </span>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {ranking.map((v, i) => (
-                      <tr key={v.id} className="hover:bg-white/[0.02] transition-colors">
-                        <td className="px-4 py-3.5">
-                          <span className="text-sm font-mono text-text-dim font-bold">{String(i + 1).padStart(2, '0')}</span>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <Link href={`/estoque/${v.id}`} className="hover:text-primary transition-colors">
-                            <p className="text-sm font-semibold text-text-primary">{v.marca} {v.modelo} {v.ano}</p>
-                            <p className="text-xs text-text-muted font-mono">{v.placa} · {v.data_venda?.split('-').reverse().join('/')}</p>
-                          </Link>
-                        </td>
-                        <td className="px-4 py-3.5 text-right hidden sm:table-cell">
-                          <p className="text-sm font-semibold font-mono text-text-primary">{fmt(v.preco_venda_final)}</p>
-                        </td>
-                        <td className="px-4 py-3.5 text-right hidden md:table-cell">
-                          <p className="text-xs font-mono text-red-400">{fmt(v.total_custos + v.preco_compra)}</p>
-                        </td>
-                        <td className="px-4 py-3.5 text-right">
-                          <p className={cn('text-sm font-bold font-mono', v.lucro_real >= 0 ? 'text-green-400' : 'text-red-400')}>
-                            {fmt(v.lucro_real)}
-                          </p>
-                        </td>
-                        <td className="px-4 py-3.5 text-right hidden sm:table-cell">
-                          <span className={cn(
-                            'badge',
-                            v.margem_pct >= 10 ? 'bg-green-400/10 text-green-400'
-                              : v.margem_pct >= 0 ? 'bg-yellow-400/10 text-yellow-400'
-                              : 'bg-red-400/10 text-red-400',
-                          )}>
-                            {v.margem_pct?.toFixed(1)}%
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  {ranking.length > 1 && (
-                    <tfoot>
-                      <tr className="border-t-2 border-border bg-white/[0.02]">
-                        <td className="px-4 py-3 text-2xs font-bold text-text-muted uppercase tracking-widest" colSpan={2}>Total</td>
-                        <td className="px-4 py-3 text-right hidden sm:table-cell">
-                          <p className="text-sm font-bold font-mono text-text-primary">{fmt(resumo?.receita)}</p>
-                        </td>
-                        <td className="px-4 py-3 text-right hidden md:table-cell">
-                          <p className="text-xs font-mono font-bold text-red-400">
-                            {fmt(ranking.reduce((s, v) => s + (v.total_custos ?? 0) + (v.preco_compra ?? 0), 0))}
-                          </p>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <p className={cn('text-sm font-bold font-mono', (resumo?.lucro_real ?? 0) >= 0 ? 'text-green-400' : 'text-red-400')}>
-                            {fmt(resumo?.lucro_real)}
-                          </p>
-                        </td>
-                        <td className="px-4 py-3 text-right hidden sm:table-cell">
-                          <span className="text-xs font-semibold text-text-muted">{resumo?.margem_pct?.toFixed(1)}%</span>
-                        </td>
-                      </tr>
-                    </tfoot>
-                  )}
-                </table>
-              </div>
+                  ))}
+                </tbody>
+                {ranking.length > 1 && (
+                  <tfoot>
+                    <tr className="border-t-2 border-border bg-white/[0.02]">
+                      <td className="px-2 md:px-4 py-2.5 md:py-3 text-2xs font-bold text-text-muted uppercase tracking-widest" colSpan={2}>Total</td>
+                      <td className="px-2 md:px-4 py-2.5 md:py-3 text-right hidden sm:table-cell">
+                        <p className="text-sm font-bold font-mono text-text-primary">{fmt(resumo?.receita)}</p>
+                      </td>
+                      <td className="px-2 md:px-4 py-2.5 md:py-3 text-right hidden md:table-cell">
+                        <p className="text-xs font-mono font-bold text-red-400">
+                          {fmt(ranking.reduce((s, v) => s + (v.total_custos ?? 0) + (v.preco_compra ?? 0), 0))}
+                        </p>
+                      </td>
+                      <td className="px-2 md:px-4 py-2.5 md:py-3 text-right">
+                        <p className={cn('text-xs md:text-sm font-bold font-mono', (resumo?.lucro_real ?? 0) >= 0 ? 'text-green-400' : 'text-red-400')}>
+                          <span className="md:hidden">{fmtShort(resumo?.lucro_real)}</span>
+                          <span className="hidden md:inline">{fmt(resumo?.lucro_real)}</span>
+                        </p>
+                      </td>
+                      <td className="px-2 md:px-4 py-2.5 md:py-3 text-right hidden sm:table-cell">
+                        <span className="text-xs font-semibold text-text-muted">{resumo?.margem_pct?.toFixed(1)}%</span>
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
             )}
           </div>
         </div>
@@ -295,18 +295,22 @@ export default function FinanceiroPage() {
               ) : (
                 <>
                   <div className="grid grid-cols-3 divide-x divide-border border-b border-border">
-                    <div className="p-4 text-center">
+                    <div className="p-3 md:p-4 text-center">
                       <p className="stat-label">Veículos</p>
-                      <p className="stat-number text-2xl mt-1">{estoque?.qtd_veiculos ?? 0}</p>
+                      <p className="stat-number text-xl md:text-2xl mt-1">{estoque?.qtd_veiculos ?? 0}</p>
                     </div>
-                    <div className="p-4 text-center">
+                    <div className="p-3 md:p-4 text-center">
                       <p className="stat-label">Investido</p>
-                      <p className="text-sm font-bold font-mono text-text-primary mt-1">{fmt(estoque?.total_investido)}</p>
+                      <p className="text-xs md:text-sm font-bold font-mono text-text-primary mt-1">
+                        <span className="md:hidden">{fmtShort(estoque?.total_investido)}</span>
+                        <span className="hidden md:inline">{fmt(estoque?.total_investido)}</span>
+                      </p>
                     </div>
-                    <div className="p-4 text-center">
+                    <div className="p-3 md:p-4 text-center">
                       <p className="stat-label">Lucro est.</p>
-                      <p className={cn('text-sm font-bold font-mono mt-1', (estoque?.lucro_estimado ?? 0) >= 0 ? 'text-green-400' : 'text-red-400')}>
-                        {fmt(estoque?.lucro_estimado)}
+                      <p className={cn('text-xs md:text-sm font-bold font-mono mt-1', (estoque?.lucro_estimado ?? 0) >= 0 ? 'text-green-400' : 'text-red-400')}>
+                        <span className="md:hidden">{fmtShort(estoque?.lucro_estimado)}</span>
+                        <span className="hidden md:inline">{fmt(estoque?.lucro_estimado)}</span>
                       </p>
                     </div>
                   </div>
@@ -319,9 +323,9 @@ export default function FinanceiroPage() {
                             <p className="text-xs text-text-muted font-mono">{v.placa}</p>
                           </div>
                           <div className="text-right ml-3 flex-shrink-0">
-                            <p className="text-xs font-mono text-text-muted">{fmt(v.investimento_total)}</p>
+                            <p className="text-xs font-mono text-text-muted">{fmtShort(v.investimento_total)}</p>
                             <p className={cn('text-xs font-semibold font-mono', v.lucro_estimado >= 0 ? 'text-green-400' : 'text-red-400')}>
-                              {fmt(v.lucro_estimado)}
+                              {fmtShort(v.lucro_estimado)}
                             </p>
                           </div>
                         </Link>

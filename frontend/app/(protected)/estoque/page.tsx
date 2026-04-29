@@ -49,6 +49,8 @@ const STATUS_BAR: Record<string, string> = {
   inativo:    'bg-text-dim',
 };
 
+const POR_PAGINA = 20;
+
 export default function EstoquePage() {
   const [veiculos, setVeiculos] = useState<Veiculo[]>([]);
   const [todos, setTodos]       = useState<Veiculo[]>([]);
@@ -57,6 +59,7 @@ export default function EstoquePage() {
   const [busca, setBusca]       = useState('');
   const [status, setStatus]     = useState('disponivel');
   const [mes, setMes]           = useState<string>(() => new Date().toISOString().slice(0, 7));
+  const [pagina, setPagina]     = useState(0);
 
   const carregar = useCallback(async () => {
     setLoading(true); setErro(false);
@@ -82,6 +85,11 @@ export default function EstoquePage() {
     : status === 'vendido'
       ? veiculos.filter(v => v.data_venda?.startsWith(mes))
       : veiculos;
+
+  useEffect(() => { setPagina(0); }, [status, busca, mes]);
+
+  const totalPaginas = Math.ceil(filtrados.length / POR_PAGINA);
+  const paginados    = filtrados.slice(pagina * POR_PAGINA, (pagina + 1) * POR_PAGINA);
 
   return (
     <div className="animate-fade-in h-full flex flex-col">
@@ -202,7 +210,7 @@ export default function EstoquePage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filtrados.map(v => {
+                {paginados.map(v => {
                   const lucro = v.status === 'vendido' ? (v.lucro_real ?? v.lucro_estimado) : v.lucro_estimado;
                   const preco = v.status === 'vendido' && v.preco_venda_final ? v.preco_venda_final : v.preco_venda;
                   return (
@@ -256,13 +264,36 @@ export default function EstoquePage() {
                 })}
               </tbody>
             </table>
-            <div className="px-5 py-3 border-t border-border flex items-center justify-between">
-              <p className="text-xs text-text-muted font-medium">{filtrados.length} veículo{filtrados.length !== 1 ? 's' : ''}</p>
-              {busca && (
-                <button onClick={() => setBusca('')} className="text-xs text-text-muted hover:text-primary transition-colors flex items-center gap-1 font-medium">
-                  Limpar busca <ArrowRight size={11} />
-                </button>
-              )}
+            <div className="px-5 py-3 border-t border-border flex items-center justify-between gap-3">
+              <p className="text-xs text-text-muted font-medium">
+                {filtrados.length} veículo{filtrados.length !== 1 ? 's' : ''}
+                {totalPaginas > 1 && ` · pág. ${pagina + 1}/${totalPaginas}`}
+              </p>
+              <div className="flex items-center gap-2">
+                {busca && (
+                  <button onClick={() => setBusca('')} className="text-xs text-text-muted hover:text-primary transition-colors flex items-center gap-1 font-medium">
+                    Limpar <ArrowRight size={11} />
+                  </button>
+                )}
+                {totalPaginas > 1 && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setPagina(p => Math.max(0, p - 1))}
+                      disabled={pagina === 0}
+                      className="p-1 rounded-lg border border-border text-text-muted hover:text-text-primary hover:border-border-bright disabled:opacity-30 transition-colors"
+                    >
+                      <ChevronLeft size={13} />
+                    </button>
+                    <button
+                      onClick={() => setPagina(p => Math.min(totalPaginas - 1, p + 1))}
+                      disabled={pagina >= totalPaginas - 1}
+                      className="p-1 rounded-lg border border-border text-text-muted hover:text-text-primary hover:border-border-bright disabled:opacity-30 transition-colors"
+                    >
+                      <ChevronRight size={13} />
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </>
         )}

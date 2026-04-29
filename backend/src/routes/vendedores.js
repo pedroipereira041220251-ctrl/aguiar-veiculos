@@ -7,14 +7,26 @@ const COMISSAO_PCT = 0.10; // 10%
 
 // ── GET /api/vendedores ────────────────────────────────────
 // Resumo por vendedor: qtd vendas, receita total, comissão acumulada
+// Query: mes=YYYY-MM (opcional)
 router.get('/', async (req, res) => {
   try {
-    const { data, error } = await supabase
+    const mes = req.query.mes; // "2026-04" ou undefined
+
+    let query = supabase
       .from('veiculos')
       .select('nome_vendedor, preco_venda_final, data_venda')
       .eq('status', 'vendido')
       .not('nome_vendedor', 'is', null)
       .neq('nome_vendedor', '');
+
+    if (mes) {
+      const [ano, m] = mes.split('-');
+      const ini = `${ano}-${m}-01`;
+      const fim = new Date(Number(ano), Number(m), 0).toISOString().slice(0, 10); // último dia do mês
+      query = query.gte('data_venda', ini).lte('data_venda', fim);
+    }
+
+    const { data, error } = await query;
     if (error) throw error;
 
     // Agrupar em memória

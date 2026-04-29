@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api, type VeiculoCompleto, type Custo, type Foto, type DocumentacaoVeiculo } from '@/lib/api';
-import { fmt, fmtKm, STATUS_LABEL, cn } from '@/lib/utils';
+import { fmt, fmtShort, fmtKm, STATUS_LABEL, cn } from '@/lib/utils';
 import { ChevronLeft, Edit2, Check, X, Trash2, Car, CheckCircle2, AlertCircle, Plus, Star, Lock, Unlock } from 'lucide-react';
 
 const INPUT = 'input';
@@ -274,12 +274,13 @@ export default function VeiculoDetailPage() {
       <div className="px-5 md:px-8 pb-5 md:pb-8 max-w-2xl mx-auto space-y-5 mt-5">
 
         {/* Resumo financeiro */}
-        <div className="grid grid-cols-3 gap-3">
-          <FinCard label="Investimento" value={fmt(veiculo.investimento_total)} />
-          <FinCard label="Preço de venda" value={fmt(veiculo.preco_venda)} />
+        <div className="grid grid-cols-3 gap-2 md:gap-3">
+          <FinCard label="Investimento" value={fmt(veiculo.investimento_total)} short={fmtShort(veiculo.investimento_total)} />
+          <FinCard label="Preço de venda" value={fmt(veiculo.preco_venda)} short={fmtShort(veiculo.preco_venda)} />
           <FinCard
             label={isVendido ? 'Lucro real' : 'Lucro estimado'}
             value={fmt(isVendido ? veiculo.lucro_real : veiculo.lucro_estimado)}
+            short={fmtShort(isVendido ? veiculo.lucro_real : veiculo.lucro_estimado)}
             green={(isVendido ? veiculo.lucro_real : veiculo.lucro_estimado) ?? 0}
           />
         </div>
@@ -632,7 +633,7 @@ export default function VeiculoDetailPage() {
                   <span className="text-sm font-bold text-text-primary">Registrar Venda</span>
                 </div>
               </div>
-              <form onSubmit={registrarVenda} className="p-5 space-y-4">
+              <form onSubmit={registrarVenda} className="p-5 space-y-3">
                 <div>
                   <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
                     Preço final de venda (R$) <span className="text-primary">*</span>
@@ -645,7 +646,7 @@ export default function VeiculoDetailPage() {
                     className={INPUT}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Data da venda</label>
                     <input
@@ -723,15 +724,17 @@ export default function VeiculoDetailPage() {
   );
 }
 
-function FinCard({ label, value, green }: { label: string; value: string; green?: number }) {
+function FinCard({ label, value, short, green }: { label: string; value: string; short?: string; green?: number }) {
   return (
-    <div className="bg-white/5 border border-border rounded-xl p-2.5 md:p-4 text-center">
-      <p className="text-[9px] md:text-2xs font-semibold text-text-dim uppercase tracking-widest mb-1 leading-tight">{label}</p>
+    <div className="bg-white/5 border border-border rounded-xl p-2 md:p-4 text-center">
+      <p className="text-[8px] md:text-2xs font-semibold text-text-dim uppercase tracking-wide md:tracking-widest mb-1 leading-tight">{label}</p>
       <p className={cn(
-        'text-[11px] md:text-sm font-bold font-mono leading-tight',
+        'font-bold font-mono leading-tight',
+        'text-[10px] md:text-sm',
         green === undefined ? 'text-text-primary' : green >= 0 ? 'text-green-400' : 'text-red-400',
       )}>
-        {value}
+        <span className="md:hidden">{short ?? value}</span>
+        <span className="hidden md:inline">{value}</span>
       </p>
     </div>
   );

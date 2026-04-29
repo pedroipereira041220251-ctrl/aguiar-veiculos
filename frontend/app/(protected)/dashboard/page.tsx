@@ -100,7 +100,7 @@ export default function DashboardPage() {
                 <ArrowUpRight className="w-3.5 h-3.5 text-text-dim opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
               <p className="stat-label mb-1.5">{label}</p>
-              <p className={cn('font-mono text-2xl md:text-3xl font-bold tabular-nums', color)}>
+              <p className={cn('font-mono text-xl md:text-3xl font-bold tabular-nums', color)}>
                 {value}
               </p>
               {sub && <p className="text-xs text-text-muted mt-1.5 font-medium">{sub}</p>}

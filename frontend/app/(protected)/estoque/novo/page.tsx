@@ -180,7 +180,7 @@ export default function EstoqueNovoPage() {
           {/* Precificação */}
           <FormSection title="Precificação" bar="bg-green-400">
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field id="preco_compra" label="Preço de compra (R$)" required type="number" value={form.preco_compra} onChange={v => set('preco_compra', v)} min={1} placeholder="0" />
                 <Field id="preco_venda"  label="Preço de venda (R$)"  required type="number" value={form.preco_venda}  onChange={v => set('preco_venda', v)}  min={1} placeholder="0" />
               </div>

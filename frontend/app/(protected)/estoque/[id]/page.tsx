@@ -262,15 +262,16 @@ export default function VeiculoDetailPage() {
         </div>
       </div>
 
-      <div className="p-5 md:p-8 max-w-2xl mx-auto space-y-5">
-
-        {/* Galeria de fotos */}
+      <div className="px-5 md:px-8 pt-5 md:pt-8">
         <FotoGaleria
           veiculoId={id}
           fotos={veiculo.fotos}
           bloqueado={bloqueado}
           onFotosChange={fotos => setVeiculo(p => p ? { ...p, fotos } : p)}
         />
+      </div>
+
+      <div className="px-5 md:px-8 pb-5 md:pb-8 max-w-2xl mx-auto space-y-5 mt-5">
 
         {/* Resumo financeiro */}
         <div className="grid grid-cols-3 gap-3">

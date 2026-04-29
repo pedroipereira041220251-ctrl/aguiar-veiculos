@@ -1,12 +1,31 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { api, type VendedorResumo, type VendaVendedor, type Vendedor } from '@/lib/api';
 import { fmt, cn } from '@/lib/utils';
-import { RefreshCw, Plus, Trash2, Trophy, Users, ChevronDown, ChevronUp, UserCheck } from 'lucide-react';
+import { RefreshCw, Plus, Trash2, Trophy, Users, ChevronDown, ChevronUp, UserCheck, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const PODIUM_COLOR = ['text-yellow-400', 'text-text-muted', 'text-amber-600'];
 const PODIUM_BG    = ['bg-yellow-400/10 border-yellow-400/20', 'bg-white/5 border-border', 'bg-amber-600/10 border-amber-600/20'];
+
+function mesAtual() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+function mesLabel(mes: string) {
+  const [ano, m] = mes.split('-').map(Number);
+  return new Date(ano, m - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+}
+function mesAnterior(mes: string) {
+  const [ano, m] = mes.split('-').map(Number);
+  const d = new Date(ano, m - 2, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+function mesSeguinte(mes: string) {
+  const [ano, m] = mes.split('-').map(Number);
+  const d = new Date(ano, m, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
 
 export default function VendedoresPage() {
   const [vendedores, setVendedores] = useState<VendedorResumo[]>([]);
@@ -19,20 +38,23 @@ export default function VendedoresPage() {
   const [novoNome, setNovoNome]     = useState('');
   const [salvando, setSalvando]     = useState(false);
   const [tab, setTab]               = useState<'ranking' | 'gestao'>('ranking');
+  const [mes, setMes]               = useState(mesAtual);
 
-  async function carregar() {
+  const carregar = useCallback(async () => {
     setLoading(true); setErro(false);
     try {
       const [data, cad] = await Promise.all([
-        api.vendedores.listar(),
+        api.vendedores.listar(mes),
         api.vendedores.cadastro.listar(),
       ]);
       setVendedores(data);
       setCadastro(cad);
+      setAberto(null);
+      setVendas({});
     } catch { setErro(true); } finally { setLoading(false); }
-  }
+  }, [mes]);
 
-  useEffect(() => { carregar(); }, []);
+  useEffect(() => { carregar(); }, [carregar]);
 
   async function toggleVendedor(nome: string) {
     if (aberto === nome) { setAberto(null); return; }
@@ -148,118 +170,146 @@ export default function VendedoresPage() {
 
         {/* ── Ranking ── */}
         {tab === 'ranking' && (
-          vendedores.length === 0 ? (
-            <div className="recipe-card py-16 text-center">
-              <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-border flex items-center justify-center mx-auto mb-4">
-                <Trophy size={28} className="text-text-dim" strokeWidth={1.5} />
+          <>
+            {/* Seletor de mês */}
+            <div className="flex items-center justify-between">
+              <div className="chapter-heading mb-0">
+                <span className="chapter-bar bg-yellow-400" />
+                <span className="chapter-title capitalize">{mesLabel(mes)}</span>
               </div>
-              <p className="text-sm font-semibold text-text-muted">Nenhuma venda com vendedor ainda.</p>
-              <p className="text-xs text-text-dim mt-1">Informe o vendedor ao registrar uma venda.</p>
+              <div className="flex items-center gap-1.5 bg-card border border-border rounded-xl p-1">
+                <button
+                  onClick={() => setMes(mesAnterior(mes))}
+                  className="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-white/5 transition-colors"
+                >
+                  <ChevronLeft size={15} />
+                </button>
+                <span className="text-xs font-semibold text-text-primary px-2 min-w-[130px] text-center capitalize">
+                  {mesLabel(mes)}
+                </span>
+                <button
+                  onClick={() => setMes(mesSeguinte(mes))}
+                  disabled={mes >= mesAtual()}
+                  className="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-white/5 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <ChevronRight size={15} />
+                </button>
+              </div>
             </div>
-          ) : (
-            <div className="recipe-card">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="tbl-th w-10">#</th>
-                    <th className="tbl-th">Vendedor</th>
-                    <th className="tbl-th-right hidden sm:table-cell">Vendas</th>
-                    <th className="tbl-th-right">Receita</th>
-                    <th className="tbl-th-right">Comissão</th>
-                    <th className="w-8" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {vendedores.map((v, i) => (
-                    <>
-                      <tr
-                        key={v.nome_vendedor}
-                        onClick={() => toggleVendedor(v.nome_vendedor)}
-                        className="hover:bg-white/[0.02] transition-colors cursor-pointer"
-                      >
-                        <td className="px-4 py-3.5">
-                          {i < 3 ? (
-                            <span className={cn('text-sm font-bold', PODIUM_COLOR[i])}>
-                              {i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'}
-                            </span>
-                          ) : (
-                            <span className="text-sm font-mono font-bold text-text-dim">{String(i + 1).padStart(2, '0')}</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <div className="flex items-center gap-3">
-                            <div className={cn(
-                              'w-8 h-8 rounded-full border flex items-center justify-center flex-shrink-0',
-                              i < 3 ? PODIUM_BG[i] : 'bg-primary/10 border-primary/20',
-                            )}>
-                              <span className={cn('text-xs font-bold', i < 3 ? PODIUM_COLOR[i] : 'text-primary')}>
-                                {v.nome_vendedor.charAt(0).toUpperCase()}
+
+            {vendedores.length === 0 ? (
+              <div className="recipe-card py-16 text-center">
+                <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-border flex items-center justify-center mx-auto mb-4">
+                  <Trophy size={28} className="text-text-dim" strokeWidth={1.5} />
+                </div>
+                <p className="text-sm font-semibold text-text-muted">Nenhuma venda neste período.</p>
+                <p className="text-xs text-text-dim mt-1">Tente outro mês ou informe o vendedor ao registrar uma venda.</p>
+              </div>
+            ) : (
+              <div className="recipe-card">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="tbl-th w-10">#</th>
+                      <th className="tbl-th">Vendedor</th>
+                      <th className="tbl-th-right hidden sm:table-cell">Vendas</th>
+                      <th className="tbl-th-right">Receita</th>
+                      <th className="tbl-th-right">Comissão</th>
+                      <th className="w-8" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {vendedores.map((v, i) => (
+                      <>
+                        <tr
+                          key={v.nome_vendedor}
+                          onClick={() => toggleVendedor(v.nome_vendedor)}
+                          className="hover:bg-white/[0.02] transition-colors cursor-pointer"
+                        >
+                          <td className="px-4 py-3.5">
+                            {i < 3 ? (
+                              <span className={cn('text-sm font-bold', PODIUM_COLOR[i])}>
+                                {i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'}
                               </span>
-                            </div>
-                            <p className="text-sm font-semibold text-text-primary">{v.nome_vendedor}</p>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3.5 text-right hidden sm:table-cell">
-                          <span className="badge bg-white/5 border border-border text-text-muted">
-                            {v.qtd_vendas} venda{v.qtd_vendas !== 1 ? 's' : ''}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3.5 text-right">
-                          <p className="text-sm font-semibold font-mono text-green-400">{fmt(v.total_vendas)}</p>
-                        </td>
-                        <td className="px-4 py-3.5 text-right">
-                          <p className="text-sm font-bold font-mono text-primary">{fmt(v.comissao)}</p>
-                        </td>
-                        <td className="pr-4 py-3.5 text-text-muted">
-                          {aberto === v.nome_vendedor ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                        </td>
-                      </tr>
-                      {aberto === v.nome_vendedor && (
-                        <tr key={`${v.nome_vendedor}-detalhe`}>
-                          <td colSpan={6} className="bg-white/[0.02] border-b border-border">
-                            {loadingVendas === v.nome_vendedor ? (
-                              <p className="text-xs text-text-muted text-center py-4">Carregando vendas...</p>
-                            ) : (vendas[v.nome_vendedor] || []).length === 0 ? (
-                              <p className="text-xs text-text-muted text-center py-4">Nenhuma venda encontrada.</p>
                             ) : (
-                              <div className="divide-y divide-border">
-                                {(vendas[v.nome_vendedor] || []).map(venda => (
-                                  <div key={venda.id} className="flex items-center gap-4 px-5 py-2.5 hover:bg-white/[0.02] transition-colors">
-                                    <div className="w-5 flex-shrink-0" />
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-xs font-semibold text-text-primary truncate">{venda.modelo} {venda.ano}</p>
-                                      <p className="text-2xs font-mono text-text-muted">{venda.placa} · {venda.data_venda ? venda.data_venda.split('-').reverse().join('/') : '—'}</p>
-                                    </div>
-                                    <p className="text-xs font-semibold font-mono text-green-400">{venda.preco_venda_final ? fmt(venda.preco_venda_final) : '—'}</p>
-                                    <p className={cn('text-xs font-bold font-mono', venda.comissao > 0 ? 'text-primary' : 'text-text-muted')}>
-                                      {venda.comissao > 0 ? fmt(venda.comissao) : '—'}
-                                    </p>
-                                  </div>
-                                ))}
-                              </div>
+                              <span className="text-sm font-mono font-bold text-text-dim">{String(i + 1).padStart(2, '0')}</span>
                             )}
                           </td>
+                          <td className="px-4 py-3.5">
+                            <div className="flex items-center gap-3">
+                              <div className={cn(
+                                'w-8 h-8 rounded-full border flex items-center justify-center flex-shrink-0',
+                                i < 3 ? PODIUM_BG[i] : 'bg-primary/10 border-primary/20',
+                              )}>
+                                <span className={cn('text-xs font-bold', i < 3 ? PODIUM_COLOR[i] : 'text-primary')}>
+                                  {v.nome_vendedor.charAt(0).toUpperCase()}
+                                </span>
+                              </div>
+                              <p className="text-sm font-semibold text-text-primary">{v.nome_vendedor}</p>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3.5 text-right hidden sm:table-cell">
+                            <span className="badge bg-white/5 border border-border text-text-muted">
+                              {v.qtd_vendas} venda{v.qtd_vendas !== 1 ? 's' : ''}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3.5 text-right">
+                            <p className="text-sm font-semibold font-mono text-green-400">{fmt(v.total_vendas)}</p>
+                          </td>
+                          <td className="px-4 py-3.5 text-right">
+                            <p className="text-sm font-bold font-mono text-primary">{fmt(v.comissao)}</p>
+                          </td>
+                          <td className="pr-4 py-3.5 text-text-muted">
+                            {aberto === v.nome_vendedor ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                          </td>
                         </tr>
-                      )}
-                    </>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t-2 border-border bg-white/[0.02]">
-                    <td colSpan={3} className="px-4 py-3 text-2xs font-bold text-text-muted uppercase tracking-widest hidden sm:table-cell">Total geral</td>
-                    <td colSpan={3} className="px-4 py-3 text-2xs font-bold text-text-muted uppercase tracking-widest sm:hidden">Total</td>
-                    <td className="px-4 py-3 text-right hidden sm:table-cell">
-                      <p className="text-sm font-bold font-mono text-green-400">{fmt(totalGeral)}</p>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <p className="text-sm font-bold font-mono text-primary">{fmt(comissaoGeral)}</p>
-                    </td>
-                    <td />
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          )
+                        {aberto === v.nome_vendedor && (
+                          <tr key={`${v.nome_vendedor}-detalhe`}>
+                            <td colSpan={6} className="bg-white/[0.02] border-b border-border">
+                              {loadingVendas === v.nome_vendedor ? (
+                                <p className="text-xs text-text-muted text-center py-4">Carregando vendas...</p>
+                              ) : (vendas[v.nome_vendedor] || []).length === 0 ? (
+                                <p className="text-xs text-text-muted text-center py-4">Nenhuma venda encontrada.</p>
+                              ) : (
+                                <div className="divide-y divide-border">
+                                  {(vendas[v.nome_vendedor] || []).map(venda => (
+                                    <div key={venda.id} className="flex items-center gap-4 px-5 py-2.5 hover:bg-white/[0.02] transition-colors">
+                                      <div className="w-5 flex-shrink-0" />
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-xs font-semibold text-text-primary truncate">{venda.modelo} {venda.ano}</p>
+                                        <p className="text-2xs font-mono text-text-muted">{venda.placa} · {venda.data_venda ? venda.data_venda.split('-').reverse().join('/') : '—'}</p>
+                                      </div>
+                                      <p className="text-xs font-semibold font-mono text-green-400">{venda.preco_venda_final ? fmt(venda.preco_venda_final) : '—'}</p>
+                                      <p className={cn('text-xs font-bold font-mono', venda.comissao > 0 ? 'text-primary' : 'text-text-muted')}>
+                                        {venda.comissao > 0 ? fmt(venda.comissao) : '—'}
+                                      </p>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        )}
+                      </>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-border bg-white/[0.02]">
+                      <td colSpan={3} className="px-4 py-3 text-2xs font-bold text-text-muted uppercase tracking-widest hidden sm:table-cell">Total do período</td>
+                      <td colSpan={3} className="px-4 py-3 text-2xs font-bold text-text-muted uppercase tracking-widest sm:hidden">Total</td>
+                      <td className="px-4 py-3 text-right hidden sm:table-cell">
+                        <p className="text-sm font-bold font-mono text-green-400">{fmt(totalGeral)}</p>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <p className="text-sm font-bold font-mono text-primary">{fmt(comissaoGeral)}</p>
+                      </td>
+                      <td />
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </>
         )}
 
         {/* ── Gestão / Cadastro ── */}

@@ -79,7 +79,7 @@ export const api = {
   },
 
   vendedores: {
-    listar:          () => req<VendedorResumo[]>('/api/vendedores'),
+    listar:          (mes?: string) => req<VendedorResumo[]>(`/api/vendedores${mes ? `?mes=${mes}` : ''}`),
     vendas:          (nome: string) => req<VendaVendedor[]>(`/api/vendedores/${encodeURIComponent(nome)}`),
     cadastro: {
       listar:  () => req<Vendedor[]>('/api/vendedores/cadastro'),

@@ -80,7 +80,7 @@ router.get('/hoje', async (req, res) => {
 });
 
 // ── GET /api/leads/:id ─────────────────────────────────────
-// Lead completo com conversa, anotações, foto_entrada_url
+// Lead completo com conversa, anotações, foto_entrada_urls
 router.get('/:id', async (req, res) => {
   try {
     const [{ data: lead, error }, { data: conversa, error: eC }] = await Promise.all([

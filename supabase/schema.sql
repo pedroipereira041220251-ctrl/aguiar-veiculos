@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS leads (
   score_qualificacao    integer CHECK (score_qualificacao BETWEEN 1 AND 5),
   atendimento_humano    boolean NOT NULL DEFAULT false,  -- true = agente para permanentemente
   resumo_agente         text,                  -- gerado no momento do handoff
-  foto_entrada_url      text,                  -- URL da foto de veículo de entrada
+  foto_entrada_urls     jsonb,                 -- array de {url, modelo, cor, ano, km} por veículo de entrada
   anotacoes             text,                  -- anotações manuais do dono
   created_at            timestamptz NOT NULL DEFAULT now(),
   ultima_interacao      timestamptz NOT NULL DEFAULT now()

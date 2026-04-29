@@ -121,7 +121,8 @@ Notificação deve mostrar: "Capacidade: Carta de crédito aprovada".
 
 Você envia: `Oi, quero falar com um vendedor`
 Ana deve: acionar handoff imediatamente com motivo `pedido_cliente`. Responde que vai passar para o consultor e se despede.
-Verificar: `atendimento_humano = true`. Notificação com "Cliente pediu falar com humano".
+Verificar: `atendimento_humano = true`. Notificação com "Cliente pediu falar
+ com humano".
 Enviar outra mensagem: Ana NÃO responde.
 
 ---

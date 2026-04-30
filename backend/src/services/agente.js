@@ -3,8 +3,7 @@
  *
  * Pipeline (seção 6.1):
  *  1. Debounce 3s (acumula mensagens rápidas do mesmo lead)
- *  2. Verificar horário → fora: msg_fora_horario sem GPT-4o
- *  3. Buscar / criar lead
+ *  2. Buscar / criar lead
  *  4. Carregar histórico da conversa
  *  5. GPT-4o com system prompt + histórico + tools
  *  6. Processar tool calls em sequência
@@ -72,28 +71,9 @@ export async function handler({ contato, canal, texto, imageUrl = null, body, le
 async function processarComIA({ contato, canal, mensagens, body, lead_id, imageUrls = [] }) {
   console.log('[agente] processarComIA iniciado:', contato, '| msgs:', mensagens?.length, '| fotos:', imageUrls.length);
 
-  // 1. Verificar horário de atendimento
-  const dentroHorario = await verificarHorario();
-  console.log('[agente] dentro do horário:', dentroHorario, '| HORARIO_24H:', process.env.HORARIO_24H);
-
-  // 2. Buscar ou criar lead (sempre, mesmo fora do horário — para registrar no CRM)
+  // 1. Buscar ou criar lead
   const lead = await buscarOuCriarLead(contato, canal, lead_id);
-
-  if (!dentroHorario) {
-    const { data: cfg } = await supabase.from('configuracoes').select('msg_fora_horario').eq('id', 1).single();
-    const msg = cfg?.msg_fora_horario || 'Olá! Estamos fora do horário de atendimento. Em breve retornaremos!';
-    await enviarParaCliente(contato, canal, msg);
-    // Salvar mensagem no histórico mesmo fora do horário
-    if (lead) {
-      const textoConsolidado = mensagens.filter(Boolean).join('\n');
-      if (textoConsolidado) {
-        await salvarMensagens(lead.id, canal, [{ role: 'user', content: textoConsolidado, tipo: 'text' }]);
-      }
-    }
-    return;
-  }
   console.log('[agente] lead:', lead?.id || 'null', '| humano:', lead?.atendimento_humano);
-  // (lead já foi criado/buscado antes da checagem de horário)
   if (!lead) return;
 
   // Checar novamente após busca (handoff pode ter ocorrido em paralelo)
@@ -231,7 +211,12 @@ async function processarComIA({ contato, canal, mensagens, body, lead_id, imageU
   // 7. Chamar GPT-4o com contexto atualizado
   console.log('[pipeline] passo 7 — chamando GPT-4o | modelo:', process.env.OPENAI_MODEL || 'gpt-4o', '| key:', process.env.OPENAI_API_KEY ? 'ok' : 'AUSENTE');
   const jaApresentou = historico.some(m => m.role === 'assistant');
-  const resposta = await chamarGPT(mensagensGPT, leadParaGPT, contato, canal, buildContextoLead(leadParaGPT, veiculosExibidos, jaApresentou));
+  const { data: cfgHorario } = await supabase
+    .from('configuracoes')
+    .select('horario_inicio, horario_fim, dias_semana')
+    .eq('id', 1)
+    .single();
+  const resposta = await chamarGPT(mensagensGPT, leadParaGPT, contato, canal, buildContextoLead(leadParaGPT, veiculosExibidos, jaApresentou, cfgHorario));
   console.log('[pipeline] resposta GPT:', resposta?.texto?.slice(0, 80) || 'null');
   if (!resposta) return;
 
@@ -512,7 +497,7 @@ const TOOLS = [
 // LOOP GPT-4o COM TOOL CALLS
 // ─────────────────────────────────────────────────────────
 
-function buildContextoLead(lead, veiculosExibidos = [], jaApresentou = false) {
+function buildContextoLead(lead, veiculosExibidos = [], jaApresentou = false, cfg = null) {
   if (!lead) return '';
   const linhas = [];
 
@@ -521,6 +506,19 @@ function buildContextoLead(lead, veiculosExibidos = [], jaApresentou = false) {
   const hora = agora.getHours();
   const periodo = hora < 12 ? 'manhã' : hora < 18 ? 'tarde' : 'noite';
   linhas.push(`Período do dia: ${periodo}`);
+
+  // Horário disponível para agendamento de visitas
+  if (cfg?.horario_inicio && cfg?.horario_fim) {
+    const dias = Array.isArray(cfg.dias_semana) && cfg.dias_semana.length
+      ? cfg.dias_semana.join(', ')
+      : 'Segunda a Sábado';
+    const [hIni, mIni] = cfg.horario_inicio.split(':').map(Number);
+    const [hFim, mFim] = cfg.horario_fim.split(':').map(Number);
+    const minAtual = hora * 60 + agora.getMinutes();
+    const dentroAgora = minAtual >= hIni * 60 + mIni && minAtual < hFim * 60 + mFim;
+    linhas.push(`Horário para agendamento de visitas: ${dias}, ${cfg.horario_inicio}–${cfg.horario_fim}`);
+    linhas.push(`Agora é ${dentroAgora ? 'dentro' : 'fora'} do horário de visitas.`);
+  }
 
   if (jaApresentou) {
     linhas.push('Você JÁ se apresentou ao cliente anteriormente. NÃO escreva "Sou a Ana", "Aqui é a Ana" ou qualquer apresentação nesta mensagem.');
@@ -701,8 +699,19 @@ async function executarTool(nome, args, lead, contato, canal) {
       }
 
       case 'verificar_horario': {
-        const dentro = await verificarHorario();
-        return { dentro_horario: dentro };
+        const { data: cfgH } = await supabase
+          .from('configuracoes')
+          .select('horario_inicio, horario_fim, dias_semana')
+          .eq('id', 1)
+          .single();
+        if (!cfgH) return { dentro_horario: true };
+        const agoraBr = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+        const diaSemana = agoraBr.getDay();
+        if (!cfgH.dias_semana?.includes(diaSemana)) return { dentro_horario: false };
+        const [hIni, mIni] = cfgH.horario_inicio.split(':').map(Number);
+        const [hFim, mFim] = cfgH.horario_fim.split(':').map(Number);
+        const minAtual = agoraBr.getHours() * 60 + agoraBr.getMinutes();
+        return { dentro_horario: minAtual >= hIni * 60 + mIni && minAtual < hFim * 60 + mFim };
       }
 
       case 'mover_lead': {
@@ -896,36 +905,6 @@ async function executarHandoff(leadId, motivo, resumo, contato, canal) {
   // A mensagem ao cliente já foi enviada pelo GPT como parte da resposta principal.
   // Aqui apenas registramos o handoff no banco e notificamos o dono.
   await handoffAutomatico(leadId, motivo, resumo);
-}
-
-// ─────────────────────────────────────────────────────────
-// HORÁRIO DE ATENDIMENTO
-// ─────────────────────────────────────────────────────────
-
-async function verificarHorario() {
-  // Modo 24h temporário: definir HORARIO_24H=true no Railway para bypassar
-  if (process.env.HORARIO_24H?.toLowerCase() === 'true') return true;
-
-  const { data: cfg } = await supabase
-    .from('configuracoes')
-    .select('horario_inicio, horario_fim, dias_semana')
-    .eq('id', 1)
-    .single();
-
-  if (!cfg) return true; // sem config → sempre atende
-
-  const agora = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
-  const diaSemana = agora.getDay(); // 0=dom...6=sab
-
-  if (!cfg.dias_semana.includes(diaSemana)) return false;
-
-  const [hIni, mIni] = cfg.horario_inicio.split(':').map(Number);
-  const [hFim, mFim] = cfg.horario_fim.split(':').map(Number);
-  const minAtual = agora.getHours() * 60 + agora.getMinutes();
-  const minIni   = hIni * 60 + mIni;
-  const minFim   = hFim * 60 + mFim;
-
-  return minAtual >= minIni && minAtual < minFim;
 }
 
 // ─────────────────────────────────────────────────────────

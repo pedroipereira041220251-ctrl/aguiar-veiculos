@@ -29,7 +29,6 @@ export default function ConfiguracoesPage() {
   const [horarioInicio, setHorarioInicio] = useState('08:00');
   const [horarioFim, setHorarioFim]       = useState('18:00');
   const [diasSemana, setDiasSemana]       = useState<number[]>([1, 2, 3, 4, 5, 6]);
-  const [msgFora, setMsgFora]             = useState('');
   const [ownerPhone, setOwnerPhone]       = useState('');
   const [resumoAtivo, setResumoAtivo]     = useState(true);
   const [ipvaDias, setIpvaDias]           = useState(30);
@@ -44,7 +43,6 @@ export default function ConfiguracoesPage() {
       setHorarioInicio((data.horario_inicio ?? '08:00').slice(0, 5));
       setHorarioFim((data.horario_fim ?? '18:00').slice(0, 5));
       setDiasSemana(data.dias_semana ?? [1, 2, 3, 4, 5, 6]);
-      setMsgFora(data.msg_fora_horario ?? '');
       setOwnerPhone(data.owner_phone_number ?? '');
       setResumoAtivo(data.resumo_semanal_ativo ?? true);
       setIpvaDias(data.alerta_ipva_dias ?? 30);
@@ -80,7 +78,6 @@ export default function ConfiguracoesPage() {
         horario_inicio:       horarioInicio,
         horario_fim:          horarioFim,
         dias_semana:          diasSemana,
-        msg_fora_horario:     msgFora  || undefined,
         owner_phone_number:   ownerPhone || undefined,
         resumo_semanal_ativo: resumoAtivo,
         alerta_ipva_dias:     ipvaDias,
@@ -122,7 +119,7 @@ export default function ConfiguracoesPage() {
           Painel / Configurações
         </p>
         <h1 className="text-xl md:text-2xl font-bold text-text-primary tracking-tight">Configurações do Sistema</h1>
-        <p className="text-sm text-text-muted mt-1">Horários, alertas, mensagens automáticas e status dos bots.</p>
+        <p className="text-sm text-text-muted mt-1">Horário de visitas, alertas e status dos bots.</p>
       </div>
 
       <div className="p-5 md:p-8 max-w-2xl mx-auto">
@@ -165,21 +162,9 @@ export default function ConfiguracoesPage() {
             </div>
           </Section>
 
-          {/* Mensagem fora do horário */}
+          {/* Atendimento */}
           <Section icon={<MessageSquare size={16} />} title="Atendimento e Mensagens" bar="bg-green-400">
             <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-text-muted mb-1.5 uppercase tracking-wider">
-                  Mensagem fora do horário
-                </label>
-                <textarea
-                  rows={3}
-                  value={msgFora}
-                  onChange={e => setMsgFora(e.target.value)}
-                  placeholder="Olá! No momento estamos fora do horário de atendimento..."
-                  className={INPUT}
-                />
-              </div>
               <div>
                 <label className="block text-xs font-semibold text-text-muted mb-1.5 uppercase tracking-wider">
                   Telefone do responsável

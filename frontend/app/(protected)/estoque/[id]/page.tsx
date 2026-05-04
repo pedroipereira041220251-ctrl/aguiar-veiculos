@@ -62,8 +62,9 @@ export default function VeiculoDetailPage() {
       .then(v => {
         setVeiculo(v);
         setEditForm({
-          placa: v.placa, marca: v.marca, modelo: v.modelo, ano: String(v.ano),
-          cor: v.cor, km: String(v.km), preco_compra: String(v.preco_compra),
+          placa: v.placa, marca: v.marca, modelo: v.modelo, versao: v.versao ?? '',
+          ano: String(v.ano), cor: v.cor, km: String(v.km),
+          preco_compra: String(v.preco_compra),
           preco_venda: String(v.preco_venda), obs: v.obs ?? '', tipo: v.tipo ?? '',
         });
       })
@@ -77,6 +78,7 @@ export default function VeiculoDetailPage() {
     try {
       await api.veiculos.editar(id, {
         placa: editForm.placa, marca: editForm.marca, modelo: editForm.modelo,
+        versao: editForm.versao || undefined,
         ano: Number(editForm.ano), cor: editForm.cor, km: Number(editForm.km),
         preco_compra: Number(editForm.preco_compra), preco_venda: Number(editForm.preco_venda),
         obs: editForm.obs || undefined,
@@ -229,6 +231,7 @@ export default function VeiculoDetailPage() {
               Painel / Estoque / {veiculo.placa}
             </p>
             <h1 className="text-xl font-bold text-text-primary truncate">{veiculo.marca} {veiculo.modelo} <span className="text-text-muted font-normal">{veiculo.ano}</span></h1>
+            {veiculo.versao && <p className="text-xs text-text-muted mt-0.5 truncate">{veiculo.versao}</p>}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <span className={cn(
@@ -359,6 +362,16 @@ export default function VeiculoDetailPage() {
                     />
                   </div>
                 ))}
+                <div className="col-span-2">
+                  <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Versão</label>
+                  <input
+                    type="text"
+                    value={editForm.versao ?? ''}
+                    onChange={e => setEditForm(p => ({ ...p, versao: e.target.value }))}
+                    placeholder="Ex: 1.0 Comfort Plus Flex"
+                    className={INPUT}
+                  />
+                </div>
                 <div>
                   <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Tipo</label>
                   <select
@@ -389,6 +402,7 @@ export default function VeiculoDetailPage() {
                   ['Ano',    String(veiculo.ano),       false],
                   ['Marca',  veiculo.marca,              false],
                   ['Modelo', veiculo.modelo,             false],
+                  ...(veiculo.versao ? [['Versão', veiculo.versao, false] as [string, string, boolean]] : []),
                   ['Cor',    veiculo.cor,                false],
                   ['KM',     fmtKm(veiculo.km),          false],
                   ['Compra', fmt(veiculo.preco_compra),  false],

@@ -12,13 +12,13 @@ const TIPOS = ['sedan','hatch','SUV','picape','crossover','minivan','esportivo']
 type TipoVeiculo = typeof TIPOS[number] | '';
 
 type Form = {
-  placa: string; marca: string; modelo: string; ano: string;
+  placa: string; marca: string; modelo: string; versao: string; ano: string;
   cor: string; km: string; preco_compra: string; preco_venda: string;
   fipe_referencia: string; obs: string; tipo: TipoVeiculo;
 };
 
 const INITIAL: Form = {
-  placa: '', marca: '', modelo: '', ano: String(new Date().getFullYear()),
+  placa: '', marca: '', modelo: '', versao: '', ano: String(new Date().getFullYear()),
   cor: '', km: '0', preco_compra: '', preco_venda: '', fipe_referencia: '', obs: '', tipo: '',
 };
 
@@ -46,6 +46,7 @@ export default function EstoqueNovoPage() {
           ...p,
           marca:           res.marca  ?? p.marca,
           modelo:          res.modelo ?? p.modelo,
+          versao:          res.versao ?? p.versao,
           ano:             res.ano    ? String(res.ano) : p.ano,
           cor:             res.cor    ?? p.cor,
           fipe_referencia: res.fipe   ? String(res.fipe) : p.fipe_referencia,
@@ -77,6 +78,7 @@ export default function EstoqueNovoPage() {
         preco_venda:  Number(form.preco_venda),
         criado_via:   'painel',
       };
+      if (form.versao.trim())    payload.versao          = form.versao.trim();
       if (form.fipe_referencia) payload.fipe_referencia = Number(form.fipe_referencia);
       if (form.obs.trim())       payload.obs             = form.obs.trim();
       if (form.tipo)             payload.tipo            = form.tipo;
@@ -153,6 +155,8 @@ export default function EstoqueNovoPage() {
                 <Field id="marca"  label="Marca"  required value={form.marca}  onChange={v => set('marca', v)}  placeholder="Honda" />
                 <Field id="modelo" label="Modelo" required value={form.modelo} onChange={v => set('modelo', v)} placeholder="Civic" />
               </div>
+
+              <Field id="versao" label="Versão" value={form.versao} onChange={v => set('versao', v)} placeholder="Ex: 1.0 Comfort Plus Flex" />
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>

@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS veiculos (
   nome_vendedor    text,                            -- vendedor responsável pela venda
   nome_comprador   text,                            -- comprador (para histórico)
   forma_pagamento  text,                            -- À vista, Financiamento, Consórcio
+  versao           text,
   obs              text,
   fipe_referencia  numeric(12,2),                   -- valor FIPE no momento do cadastro
   criado_via       text NOT NULL DEFAULT 'painel'

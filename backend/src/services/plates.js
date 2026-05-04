@@ -65,7 +65,7 @@ export async function consultarPlaca(placa) {
       found:  true,
       placa:  placaNorm,
       marca,
-      modelo: modeloCompleto,
+      modelo: modelo,
       versao: versaoCompleta,
       ano:    anoVeiculo,
       cor:    d.cor    || '',

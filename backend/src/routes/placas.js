@@ -66,7 +66,7 @@ router.get('/:placa', async (req, res) => {
       found:  true,
       placa,
       marca,
-      modelo: modeloCompleto,
+      modelo: modelo,
       ano:    anoVeiculo,
       cor:    d.cor    || '',
       fipe:   fipeValor,

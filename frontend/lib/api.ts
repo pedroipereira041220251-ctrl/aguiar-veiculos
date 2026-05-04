@@ -91,7 +91,7 @@ export const api = {
 
 // ── Types ──────────────────────────────────────────────────
 export interface Veiculo {
-  id: string; placa: string; marca: string; modelo: string; ano: number;
+  id: string; placa: string; marca: string; modelo: string; versao?: string; ano: number;
   cor: string; km: number; preco_compra: number; preco_venda: number;
   status: 'disponivel' | 'reservado' | 'vendido' | 'inativo';
   tipo?: string; preco_venda_final?: number; data_venda?: string; obs?: string;

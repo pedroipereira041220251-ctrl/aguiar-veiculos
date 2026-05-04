@@ -165,6 +165,7 @@ export default function DashboardPage() {
                           <p className="text-sm font-semibold text-text-primary group-hover:text-primary transition-colors">
                             {v.marca} {v.modelo} <span className="font-normal text-text-muted">{v.ano}</span>
                           </p>
+                          {v.versao && <p className="text-xs text-text-dim truncate">{v.versao}</p>}
                           <p className="text-xs font-mono text-text-muted mt-0.5">{v.placa}</p>
                         </td>
                         <td className="px-4 py-3.5 hidden md:table-cell">

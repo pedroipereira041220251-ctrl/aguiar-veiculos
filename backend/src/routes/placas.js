@@ -3,7 +3,7 @@ import axios from 'axios';
 
 const router = Router();
 
-function melhorFipe(dados, versao) {
+function melhorFipe(dados, versao, ano) {
   if (!dados?.length) return null;
   if (dados.length === 1) return dados[0];
   const norm = s => (s || '').toLowerCase()
@@ -12,8 +12,9 @@ function melhorFipe(dados, versao) {
   const words = norm(versao).split(/\s+/).filter(Boolean);
   let best = 0, bestScore = -1;
   dados.forEach((d, i) => {
-    const m = norm(d.modelo || '');
-    const score = words.filter(w => m.includes(w)).length;
+    const m = norm(d.texto_modelo || '');
+    let score = words.filter(w => m.includes(w)).length;
+    if (ano && String(d.ano_modelo) === String(ano)) score += 0.5;
     if (score > bestScore) { bestScore = score; best = i; }
   });
   return dados[best];
@@ -51,23 +52,22 @@ router.get('/:placa', async (req, res) => {
       .join(' ')
       .trim();
 
+    const anoVeiculo = parseInt(d.anoModelo || d.ano || 0, 10);
     const versaoRaw = versaoCompleta || modeloCompleto;
-    const fipeEntry = melhorFipe(d.fipe?.dados, versaoRaw);
+    const fipeEntry = melhorFipe(d.fipe?.dados, versaoRaw, anoVeiculo);
     const fipeTexto = fipeEntry?.texto_valor || '';
     const fipeValor = fipeTexto
       ? parseFloat(fipeTexto.replace(/[^0-9,]/g, '').replace(',', '.'))
       : null;
 
-    console.log('[placas] versao:', versaoRaw, '| fipe.dados:', d.fipe?.dados?.length ?? 0, 'entradas');
-    console.log('[placas] fipe.dados[0]:', JSON.stringify(d.fipe?.dados?.[0]));
-    console.log('[placas] fipe selecionado:', JSON.stringify(fipeEntry), '|', fipeTexto || 'sem valor');
+    console.log('[placas] versao:', versaoRaw, '| fipe.dados:', d.fipe?.dados?.length ?? 0, 'entradas | selecionado:', fipeEntry?.texto_modelo ?? 'nenhum', '|', fipeTexto || 'sem valor');
 
     return res.json({
       found:  true,
       placa,
       marca,
       modelo: modeloCompleto,
-      ano:    parseInt(d.anoModelo || d.ano || 0, 10),
+      ano:    anoVeiculo,
       cor:    d.cor    || '',
       fipe:   fipeValor,
       versao: versaoCompleta,

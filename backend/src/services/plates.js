@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-function melhorFipe(dados, versao) {
+function melhorFipe(dados, versao, ano) {
   if (!dados?.length) return null;
   if (dados.length === 1) return dados[0];
   const norm = s => (s || '').toLowerCase()
@@ -9,8 +9,9 @@ function melhorFipe(dados, versao) {
   const words = norm(versao).split(/\s+/).filter(Boolean);
   let best = 0, bestScore = -1;
   dados.forEach((d, i) => {
-    const m = norm(d.modelo || '');
-    const score = words.filter(w => m.includes(w)).length;
+    const m = norm(d.texto_modelo || '');
+    let score = words.filter(w => m.includes(w)).length;
+    if (ano && String(d.ano_modelo) === String(ano)) score += 0.5;
     if (score > bestScore) { bestScore = score; best = i; }
   });
   return dados[best];
@@ -49,8 +50,9 @@ export async function consultarPlaca(placa) {
       .join(' ')
       .trim();
 
+    const anoVeiculo = parseInt(d.anoModelo || d.ano || 0, 10);
     const versaoRaw = versaoCompleta || modeloCompleto;
-    const fipeEntry = melhorFipe(d.fipe?.dados, versaoRaw);
+    const fipeEntry = melhorFipe(d.fipe?.dados, versaoRaw, anoVeiculo);
     const fipeTexto = fipeEntry?.texto_valor || '';
     const fipeValor = fipeTexto
       ? parseFloat(fipeTexto.replace(/[^0-9,]/g, '').replace(',', '.'))
@@ -65,7 +67,7 @@ export async function consultarPlaca(placa) {
       marca,
       modelo: modeloCompleto,
       versao: versaoCompleta,
-      ano:    parseInt(d.anoModelo || d.ano || 0, 10),
+      ano:    anoVeiculo,
       cor:    d.cor    || '',
       fipe:   fipeValor,
     };

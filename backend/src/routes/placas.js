@@ -58,6 +58,8 @@ router.get('/:placa', async (req, res) => {
       ? parseFloat(fipeTexto.replace(/[^0-9,]/g, '').replace(',', '.'))
       : null;
 
+    console.log('[placas] versao:', versaoRaw, '| fipe.dados:', d.fipe?.dados?.length ?? 0, 'entradas | selecionado:', fipeEntry?.modelo ?? 'nenhum', '|', fipeTexto || 'sem valor');
+
     return res.json({
       found:  true,
       placa,

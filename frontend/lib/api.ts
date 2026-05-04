@@ -138,7 +138,7 @@ export interface LeadCompleto extends Lead {
 
 export interface PlacaResult {
   found: boolean; placa?: string; marca?: string; modelo?: string;
-  ano?: number; cor?: string; fipe?: number;
+  ano?: number; cor?: string; fipe?: number; versao?: string;
 }
 
 export interface FinanceiroResumo {

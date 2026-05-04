@@ -14,12 +14,12 @@ type TipoVeiculo = typeof TIPOS[number] | '';
 type Form = {
   placa: string; marca: string; modelo: string; ano: string;
   cor: string; km: string; preco_compra: string; preco_venda: string;
-  fipe_referencia: string; obs: string; tipo: TipoVeiculo;
+  fipe_referencia: string; obs: string; tipo: TipoVeiculo; versao: string;
 };
 
 const INITIAL: Form = {
   placa: '', marca: '', modelo: '', ano: String(new Date().getFullYear()),
-  cor: '', km: '0', preco_compra: '', preco_venda: '', fipe_referencia: '', obs: '', tipo: '',
+  cor: '', km: '0', preco_compra: '', preco_venda: '', fipe_referencia: '', obs: '', tipo: '', versao: '',
 };
 
 export default function EstoqueNovoPage() {
@@ -46,6 +46,7 @@ export default function EstoqueNovoPage() {
           ...p,
           marca:           res.marca  ?? p.marca,
           modelo:          res.modelo ?? p.modelo,
+          versao:          res.versao ?? p.versao,
           ano:             res.ano    ? String(res.ano) : p.ano,
           cor:             res.cor    ?? p.cor,
           fipe_referencia: res.fipe   ? String(res.fipe) : p.fipe_referencia,
@@ -80,6 +81,7 @@ export default function EstoqueNovoPage() {
       if (form.fipe_referencia) payload.fipe_referencia = Number(form.fipe_referencia);
       if (form.obs.trim())       payload.obs             = form.obs.trim();
       if (form.tipo)             payload.tipo            = form.tipo;
+      if (form.versao.trim())    payload.versao          = form.versao.trim();
 
       const v = await api.veiculos.criar(payload);
       router.push(`/estoque/${v.id}`);
@@ -149,12 +151,14 @@ export default function EstoqueNovoPage() {
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field id="marca"  label="Marca"  required value={form.marca}  onChange={v => set('marca', v)}  placeholder="Honda" />
                 <Field id="modelo" label="Modelo" required value={form.modelo} onChange={v => set('modelo', v)} placeholder="Civic" />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <Field id="versao" label="Versão" value={form.versao} onChange={v => set('versao', v)} placeholder="1.0 Comfort Plus (preenchido pela API)" />
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label htmlFor="tipo" className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">Tipo</label>
                   <select
@@ -170,7 +174,7 @@ export default function EstoqueNovoPage() {
                 <Field id="ano" label="Ano" required type="number" value={form.ano} onChange={v => set('ano', v)} min={1950} max={2030} />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field id="cor" label="Cor" required value={form.cor} onChange={v => set('cor', v)} placeholder="Branco" />
                 <Field id="km" label="Quilometragem" required type="number" value={form.km} onChange={v => set('km', v)} min={0} placeholder="0" />
               </div>

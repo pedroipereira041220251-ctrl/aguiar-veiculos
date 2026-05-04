@@ -3,6 +3,22 @@ import axios from 'axios';
 
 const router = Router();
 
+function melhorFipe(dados, versao) {
+  if (!dados?.length) return null;
+  if (dados.length === 1) return dados[0];
+  const norm = s => (s || '').toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9 ]/g, ' ').trim();
+  const words = norm(versao).split(/\s+/).filter(Boolean);
+  let best = 0, bestScore = -1;
+  dados.forEach((d, i) => {
+    const m = norm(d.modelo || '');
+    const score = words.filter(w => m.includes(w)).length;
+    if (score > bestScore) { bestScore = score; best = i; }
+  });
+  return dados[best];
+}
+
 // ── GET /api/placas/:placa ─────────────────────────────────
 // Proxy para apiplacas.com.br. PLATE_API_TOKEN nunca exposto ao frontend.
 router.get('/:placa', async (req, res) => {
@@ -29,7 +45,15 @@ router.get('/:placa', async (req, res) => {
       .join(' ')
       .trim() || modelo;
 
-    const fipeTexto = d.fipe?.dados?.[0]?.texto_valor || '';
+    const versaoCompleta = [sub, versao]
+      .filter(Boolean)
+      .filter((v, i, arr) => arr.indexOf(v) === i)
+      .join(' ')
+      .trim();
+
+    const versaoRaw = versaoCompleta || modeloCompleto;
+    const fipeEntry = melhorFipe(d.fipe?.dados, versaoRaw);
+    const fipeTexto = fipeEntry?.texto_valor || '';
     const fipeValor = fipeTexto
       ? parseFloat(fipeTexto.replace(/[^0-9,]/g, '').replace(',', '.'))
       : null;
@@ -42,6 +66,7 @@ router.get('/:placa', async (req, res) => {
       ano:    parseInt(d.anoModelo || d.ano || 0, 10),
       cor:    d.cor    || '',
       fipe:   fipeValor,
+      versao: versaoCompleta,
     });
   } catch (err) {
     if (err.response?.status === 404) return res.json({ found: false });

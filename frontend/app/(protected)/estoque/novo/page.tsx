@@ -156,7 +156,7 @@ export default function EstoqueNovoPage() {
                 <Field id="modelo" label="Modelo" required value={form.modelo} onChange={v => set('modelo', v)} placeholder="Civic" />
               </div>
 
-              <Field id="versao" label="Versão" value={form.versao} onChange={v => set('versao', v)} placeholder="1.0 Comfort Plus (preenchido pela API)" />
+              <Field id="versao" label="Versão" value={form.versao} onChange={v => set('versao', v)} placeholder="Ex: 1.0 Comfort Plus" />
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
